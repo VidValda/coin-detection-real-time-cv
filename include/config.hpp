@@ -34,14 +34,14 @@ namespace coin
 
         static constexpr double MIN_CONTOUR_AREA = 464.0;
         static constexpr double MIN_CIRCULARITY = 0.56;
-        static constexpr double DIAMETER_MM_MIN = 10.0;
-        static constexpr double DIAMETER_MM_MAX = 40.0;
+        static constexpr double DIAMETER_MM_MIN = 15.0;
+        static constexpr double DIAMETER_MM_MAX = 30.0;
 
         static constexpr int CENTER_MATCH_PX = 20;
-        static constexpr int DIAMETER_HISTORY_LEN = 100;
-        static constexpr int MAX_FRAMES_MISSING = 5;
+        static constexpr int DIAMETER_HISTORY_LEN = 20;
+        static constexpr int MAX_FRAMES_MISSING = 2;
         static constexpr double MAX_DIAMETER_DEVIATION_MM = 3.0;
-        static constexpr int MIN_SAMPLES_FOR_STABLE = 3;
+        static constexpr int MIN_SAMPLES_FOR_STABLE = 2;
 
         static constexpr const char *CSV_PATH = "coin_data.csv";
         static constexpr int CSV_TARGET_POINTS = 3000;
@@ -72,12 +72,12 @@ namespace coin
         static constexpr double PAPER_APPROX_EPS_FACTOR = 0.02;
         static constexpr int PAPER_MIN_AREA = 10000;
         static constexpr int PAPER_DETECT_MAX_WIDTH = 480;
-        static constexpr int STABILIZER_WINDOW = 10;
+        static constexpr int STABILIZER_WINDOW = 100;
         static constexpr double COIN_DETECT_SCALE = 1;
 
-        static constexpr int PAPER_DETECT_EVERY_N_FRAMES = 50;
+        static constexpr int PAPER_DETECT_EVERY_N_FRAMES = 10;
 
-        static constexpr int COIN_DETECT_EVERY_N_FRAMES = 5;
+        static constexpr int COIN_DETECT_EVERY_N_FRAMES = 30;
 
         static constexpr int MAX_DISPLAY_WIDTH_PX = 960;
 
