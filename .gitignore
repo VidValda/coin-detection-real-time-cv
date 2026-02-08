@@ -34,3 +34,6 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Large video files
+data/videos/*.mp4
+
