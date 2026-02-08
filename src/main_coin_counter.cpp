@@ -82,7 +82,7 @@ int main(int argc, char **argv)
 
   coin::PipelineContext ctx(coin::Config::STABILIZER_WINDOW, width_px, height_px, ratio_px_to_mm);
 
-  cv::namedWindow("Anti-Glare Detection", cv::WINDOW_AUTOSIZE);
+  cv::namedWindow("Coin Counter", cv::WINDOW_AUTOSIZE);
   coin::create_debug_windows();
 
   std::cout << "Using px-to-mm ratio: " << ratio_px_to_mm << " mm/px (from SCALE_FACTOR).\n";

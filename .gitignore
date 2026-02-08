@@ -34,6 +34,3 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Data directory: ignore large/generated assets; optional: track YAML/CSV under data/
-data/models/*.pt
-data/videos/

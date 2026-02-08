@@ -60,8 +60,8 @@ namespace coin
         static constexpr const char *TRAINING_MANIFEST = "training_data_2/manifest.csv";
 
         static constexpr const char *TEST_VIDEO_1 = "videos/test1.mp4";
-        static constexpr const char *TEST_VIDEO_2 = "videos/test2.mp4";
-        static constexpr bool USE_TEST_VIDEOS = false;
+        //static constexpr const char *TEST_VIDEO_2 = "videos/test2.mp4";
+        static constexpr bool USE_TEST_VIDEOS = true;
 
         static constexpr double PAPER_WIDTH_MM = 330.0;
         static constexpr double PAPER_HEIGHT_MM = 216.0;
