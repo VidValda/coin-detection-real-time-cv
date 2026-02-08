@@ -1,59 +1,52 @@
 # Docker Usage Guide
 
-This project provides Docker containers for easy deployment without installing OpenCV or LibTorch locally. Run the coin counter on any computer with Docker installed.
+This project provides a Docker container for easy deployment without installing OpenCV or LibTorch locally. Run the coin counter on any computer with Docker installed.
 
 ---
 
 ## Quick Start
 
-### 1. Build Images
+### 1. Build and Run (One Command)
 
-Build both variants (SVM-only and LibTorch-enabled):
+The easiest way to get started:
+
+```bash
+./docker-build-and-run.sh
+```
+
+This builds the Docker image and automatically starts the coin counter.
+
+---
+
+### 2. Build Image
+
+Build the Docker image with full capabilities (includes LibTorch for deep learning):
 
 ```bash
 ./docker-build.sh
 ```
 
-This creates two images:
-- `coin-counter:svm` - Lightweight SVM-only variant (~500MB)
-- `coin-counter:dl` - Full variant with LibTorch (~1.5GB)
+This creates the `coin-counter:latest` image (~1.5GB) including:
+- OpenCV 4.5.4
+- LibTorch 2.5.1 CPU
+- All 6 classifiers (SVM, KNN, RF, NB, CNN, ResNet18)
 
-**Build time:**
-- SVM variant: 3-5 minutes
-- DL variant: 10-15 minutes (downloads LibTorch)
-
-Or build individually:
-
-```bash
-# Lightweight SVM-only
-docker build --build-arg BUILD_WITH_TORCH=OFF -t coin-counter:svm .
-
-# Full with LibTorch (includes CNN/ResNet18)
-docker build --build-arg BUILD_WITH_TORCH=ON -t coin-counter:dl .
-```
+**Build time:** 10-15 minutes (downloads ~200MB LibTorch archive)
 
 ---
 
-### 2. Run Coin Counter
+### 3. Run Coin Counter
 
 **Using helper script (recommended):**
 
 ```bash
-# SVM classifier
-./docker-run.sh coin-counter:svm
-
-# Deep learning classifier
-./docker-run.sh coin-counter:dl
+./docker-run.sh coin-counter
 ```
 
 **Using docker-compose:**
 
 ```bash
-# SVM variant
-docker-compose --profile svm up coin-counter-svm
-
-# Deep learning variant
-docker-compose --profile dl up coin-counter-dl
+docker-compose up coin-counter
 ```
 
 **Using docker run directly:**
@@ -67,26 +60,26 @@ docker run -it --rm \
   -v $(pwd)/data:/app/data:ro \
   --device=/dev/video2:/dev/video2 \
   --network host \
-  coin-counter:svm
+  coin-counter:latest
 
 xhost -local:docker
 ```
 
 ---
 
-### 3. Training Tools
+### 4. Training Tools
 
 Run training executables with write access to data:
 
 ```bash
 # Capture training samples
-./docker-train.sh coin-counter:svm train_acquisition
+./docker-train.sh coin-counter train_acquisition
 
 # Train SVM classifier
-./docker-train.sh coin-counter:svm train_svm
+./docker-train.sh coin-counter train_svm
 
 # Camera calibration
-./docker-train.sh coin-counter:svm camera_calibration
+./docker-train.sh coin-counter camera_calibration
 ```
 
 Or with docker-compose:
@@ -101,14 +94,49 @@ docker-compose --profile train run --rm coin-counter-train train_svm
 
 ---
 
+## What's Displayed
+
+When you run the coin counter, **two separate windows** appear:
+
+1. **Camera View** (left) - Shows `test1.mp4` with green paper detection outline
+2. **Coin Detection** (right) - Shows warped paper view with:
+   - Detected coins (colored circles)
+   - Coin diameters in mm
+   - Info box (top-left): Coin count, total value, current classifier
+   - Keyboard controls legend (bottom-left)
+   - FPS counter (top-right)
+
+The application automatically plays `data/videos/test1.mp4` in a loop (no camera needed).
+
+---
+
+## Keyboard Controls
+
+While the application is running:
+
+| Key | Action |
+|-----|--------|
+| `1` | Switch to SVM classifier |
+| `2` | Switch to KNN classifier |
+| `3` | Switch to Random Forest classifier |
+| `4` | Switch to Naive Bayes classifier |
+| `5` | Switch to CNN classifier (deep learning) |
+| `6` | Switch to ResNet18 classifier (deep learning) |
+| `t` | Toggle performance timings display |
+| `q` | Quit application |
+
+The keyboard legend is displayed in the bottom-left corner of the Coin Detection window.
+
+---
+
 ## Configuration
 
 ### Camera Device
 
-Default camera is `/dev/video2`. Change via environment variable:
+Default camera is `/dev/video2` (not used when playing test video). Change via environment variable:
 
 ```bash
-CAMERA_DEV=/dev/video0 ./docker-run.sh coin-counter:svm
+CAMERA_DEV=/dev/video0 ./docker-run.sh coin-counter
 ```
 
 Or edit `docker-compose.yml` devices section:
@@ -186,41 +214,24 @@ For headless servers, consider:
 
 ---
 
-## Keyboard Controls
-
-Once the coin counter is running:
-
-| Key | Action |
-|-----|--------|
-| `1` | Switch to SVM classifier |
-| `2` | Switch to KNN classifier |
-| `3` | Switch to Random Forest classifier |
-| `4` | Switch to Naive Bayes classifier |
-| `5` | Switch to CNN classifier (DL variant only) |
-| `6` | Switch to ResNet18 classifier (DL variant only) |
-| `t` | Toggle performance timings display |
-| `q` | Quit application |
-
----
-
 ## Troubleshooting
 
 ### Display Issues
 
-**Problem:** `cannot open display: :0` or blank window
+**Problem:** `cannot open display: :0` or blank windows
 
 **Solution:**
 
 ```bash
 # Enable X11 access
 xhost +local:docker
-./docker-run.sh coin-counter:svm
+./docker-run.sh coin-counter
 
 # If still fails, check DISPLAY variable
 echo $DISPLAY  # Should show :0 or :1
 
 # Try setting explicitly
-DISPLAY=:0 ./docker-run.sh coin-counter:svm
+DISPLAY=:0 ./docker-run.sh coin-counter
 ```
 
 ### Camera Access Denied
@@ -239,7 +250,7 @@ sudo usermod -aG video $USER
 ```bash
 ls -l /dev/video*
 # Use the correct device
-CAMERA_DEV=/dev/video0 ./docker-run.sh
+CAMERA_DEV=/dev/video0 ./docker-run.sh coin-counter
 ```
 
 **Solution 3:** Run with privileged mode (less secure)
@@ -265,58 +276,32 @@ chmod -R a+rw data/models data/training_data_2
 sudo chown -R 1000:1000 data/
 ```
 
-### LibTorch Model Loading Fails
+### Video File Not Found
 
-**Problem:** DL variant cannot load `.pt` models
+**Problem:** Application fails to start or shows black screen
 
-**Solution:** Ensure models are exported with compatible PyTorch version (2.5.1):
-
-```bash
-# On host with Python and PyTorch installed
-python export_torchscript.py
-
-# Or rebuild models inside container
-docker run -it --rm \
-  -v $(pwd)/data:/app/data:rw \
-  coin-counter:dl \
-  bash
-# Then run export script inside container
-```
-
-### Image Too Large
-
-**Current sizes:**
-- `coin-counter:svm`: ~500MB
-- `coin-counter:dl`: ~1.5GB
-
-**To reduce size:**
-
-1. Use SVM variant only (skip DL build)
-2. Remove test videos from data directory before COPY
-3. Use `docker build --squash` (experimental feature)
-4. Multi-arch builds for specific platform only
-
-### Container Won't Start
-
-**Check logs:**
+The application expects `data/videos/test1.mp4` to exist. Ensure:
 
 ```bash
-docker logs coin_counter_svm
-# or
-docker-compose logs coin-counter-svm
+# Check if test video exists
+ls -lh data/videos/test1.mp4
+
+# If missing, the application will try camera instead
+# To disable test videos and force camera:
+# Edit include/config.hpp: USE_TEST_VIDEOS = false
 ```
 
-**Check image exists:**
+### Windows Don't Appear Side-by-Side
 
-```bash
-docker images coin-counter
-```
+**Problem:** Both windows overlap or only one appears
 
-**Rebuild from scratch:**
+Your screen resolution may be too small. The windows are positioned at:
+- Camera View: x=50
+- Coin Detection: x=1050
 
-```bash
-docker build --no-cache -t coin-counter:svm .
-```
+Each window can be up to 960px wide, requiring ~2000px horizontal space.
+
+**Solution:** Manually reposition windows or use a larger display (1920×1080 recommended).
 
 ---
 
@@ -326,13 +311,13 @@ docker build --no-cache -t coin-counter:svm .
 
 ```bash
 # Run camera calibration
-./docker-run.sh coin-counter:svm camera_calibration
+./docker-run.sh coin-counter camera_calibration
 
 # Run training acquisition
-./docker-train.sh coin-counter:svm train_acquisition
+./docker-train.sh coin-counter train_acquisition
 
 # Run SVM training
-./docker-train.sh coin-counter:svm train_svm
+./docker-train.sh coin-counter train_svm
 ```
 
 ### Interactive Shell
@@ -342,7 +327,7 @@ Debug or explore inside the container:
 ```bash
 docker run -it --rm \
   -v $(pwd)/data:/app/data:rw \
-  coin-counter:svm \
+  coin-counter:latest \
   bash
 
 # Inside container:
@@ -359,23 +344,7 @@ Use a different data directory:
 docker run -it --rm \
   -e COIN_DATA_DIR=/custom/path \
   -v /host/custom/data:/custom/path:ro \
-  coin-counter:svm
-```
-
-### Change Camera Index via CLI
-
-The executables accept camera index as second argument:
-
-```bash
-# Use camera 0 instead of default 2
-docker run -it --rm \
-  -e DISPLAY=$DISPLAY \
-  -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
-  -v $(pwd)/data:/app/data:ro \
-  --device=/dev/video0:/dev/video0 \
-  --network host \
-  coin-counter:svm \
-  coin_counter /app/data 0
+  coin-counter:latest
 ```
 
 ### Build Without Cache
@@ -383,7 +352,7 @@ docker run -it --rm \
 Force complete rebuild:
 
 ```bash
-docker build --no-cache --build-arg BUILD_WITH_TORCH=OFF -t coin-counter:svm .
+docker build --no-cache -t coin-counter:latest .
 ```
 
 ### Save and Load Images
@@ -392,10 +361,10 @@ Export image to share without registry:
 
 ```bash
 # Save to tar file
-docker save coin-counter:svm -o coin-counter-svm.tar
+docker save coin-counter:latest -o coin-counter.tar
 
 # Load on another machine
-docker load -i coin-counter-svm.tar
+docker load -i coin-counter.tar
 ```
 
 ### Push to Registry
@@ -404,14 +373,14 @@ Share images via Docker Hub or GitHub Container Registry:
 
 ```bash
 # Tag for registry
-docker tag coin-counter:svm yourusername/coin-counter:svm
+docker tag coin-counter:latest yourusername/coin-counter:latest
 
 # Push to Docker Hub
 docker login
-docker push yourusername/coin-counter:svm
+docker push yourusername/coin-counter:latest
 
 # Pull on another machine
-docker pull yourusername/coin-counter:svm
+docker pull yourusername/coin-counter:latest
 ```
 
 ---
@@ -440,12 +409,7 @@ docker pull yourusername/coin-counter:svm
 - libopencv-ml4.5d
 - libopencv-imgcodecs4.5d
 - libgomp1 (OpenMP for parallel processing)
-
-**LibTorch (DL variant only):**
-- Version: 2.5.1 CPU
-- Download: ~200MB zip
-- Extracted: ~735MB
-- ABI: cxx11 (matches system C++ ABI)
+- LibTorch 2.5.1 CPU (~735MB)
 
 ### Security
 
@@ -459,9 +423,9 @@ docker pull yourusername/coin-counter:svm
 
 Three stages minimize final image size:
 
-1. **builder** - Compiles code (~1.5GB with build tools)
+1. **builder** - Compiles code with LibTorch (~1.5GB with build tools)
 2. **runtime-base** - OpenCV runtime libs (~400MB)
-3. **runtime** - Final image with executables only (~500MB SVM, ~1.5GB DL)
+3. **runtime** - Final image with executables only (~1.5GB)
 
 Only the final runtime stage is included in the image.
 
@@ -478,8 +442,7 @@ This build uses LibTorch CPU version. For GPU acceleration, modify Dockerfile to
 
 ### Memory Usage
 
-- SVM variant: ~200-300MB RAM
-- DL variant: ~500-800MB RAM (ResNet18 loaded)
+- Runtime: ~500-800MB RAM (ResNet18 loaded)
 
 ### Latency
 
@@ -489,49 +452,9 @@ This build uses LibTorch CPU version. For GPU acceleration, modify Dockerfile to
 
 ---
 
-## CI/CD Integration
+## Image Size
 
-### GitHub Actions Example
-
-```yaml
-name: Build Docker Images
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Build SVM variant
-        run: docker build --build-arg BUILD_WITH_TORCH=OFF -t coin-counter:svm .
-
-      - name: Build DL variant
-        run: docker build --build-arg BUILD_WITH_TORCH=ON -t coin-counter:dl .
-
-      - name: Test SVM image
-        run: docker run --rm coin-counter:svm coin_counter --help || true
-```
-
----
-
-## Differences from Native Build
-
-| Aspect | Native Build | Docker |
-|--------|-------------|--------|
-| Dependencies | Manual install | Automatic |
-| Reproducibility | System-dependent | Identical everywhere |
-| Isolation | Shares host libs | Isolated container |
-| X11 | Direct | Socket mount needed |
-| Camera | Direct access | Device passthrough |
-| Data | Local paths | Volume mount |
-| Build time | 2-3 min | 5-15 min (includes downloads) |
-| Disk space | ~2GB (with LibTorch) | ~1.5GB (image only) |
+- **coin-counter:latest:** ~1.5GB (includes OpenCV + LibTorch + CNN/ResNet)
 
 ---
 
@@ -545,13 +468,9 @@ A: Yes, with limitations. Docker Desktop works, but X11 display requires additio
 
 A: No. Models are in the mounted `data/` directory. Update files on host and restart container.
 
-**Q: Can I run multiple containers simultaneously?**
+**Q: Why does it use test1.mp4 instead of camera?**
 
-A: Yes, but each needs a unique name and camera device. Modify `docker-compose.yml` or use `--name` with different values.
-
-**Q: How do I update to a newer LibTorch version?**
-
-A: Edit `build_with_torch.sh` to change the download URL, then rebuild the DL image.
+A: For ease of demonstration and testing. The application is configured to use `data/videos/test1.mp4` by default. To use camera, disable test videos in `include/config.hpp` or remove the test video file.
 
 **Q: Can I use GPU acceleration?**
 
@@ -559,11 +478,11 @@ A: The current build uses CPU LibTorch. For GPU, modify Dockerfile to download C
 
 **Q: Why is the image so large?**
 
-A: LibTorch is ~735MB. The SVM variant (without LibTorch) is only ~500MB. This is normal for deep learning frameworks.
+A: LibTorch is ~735MB. This is normal for deep learning frameworks. The image includes all 6 classifiers (SVM + deep learning).
 
-**Q: Can I reduce build time?**
+**Q: Can I run multiple containers simultaneously?**
 
-A: Use `docker build --build-arg BUILD_WITH_TORCH=OFF` to skip LibTorch download. Enable Docker BuildKit for better caching.
+A: Yes, but each needs a unique name and camera device. Modify `docker-compose.yml` or use `--name` with different values.
 
 ---
 

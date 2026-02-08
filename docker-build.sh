@@ -6,49 +6,32 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "========================================"
-echo "Building Coin Counter Docker Images"
+echo "Building Coin Counter Docker Image"
 echo "========================================"
 echo ""
-
-echo "Building lightweight SVM-only image..."
-echo "This should take 3-5 minutes depending on your system."
+echo "Building with LibTorch support..."
+echo "This will download ~200MB LibTorch archive"
+echo "and may take 10-15 minutes."
 echo ""
+
 docker build \
-  --build-arg BUILD_WITH_TORCH=OFF \
-  -t coin-counter:svm \
   -t coin-counter:latest \
   .
 
 echo ""
-echo "✓ SVM variant built successfully"
+echo "✓ Build complete!"
 echo ""
 echo "========================================"
-echo ""
-
-echo "Building full image with LibTorch..."
-echo "WARNING: This will download ~200MB LibTorch archive and may take 10-15 minutes."
-echo ""
-docker build \
-  --build-arg BUILD_WITH_TORCH=ON \
-  -t coin-counter:dl \
-  .
-
-echo ""
-echo "✓ DL variant built successfully"
-echo ""
+echo "Image created:"
 echo "========================================"
-echo "Build complete!"
-echo "========================================"
+docker images coin-counter:latest --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}"
 echo ""
-echo "Images created:"
-docker images coin-counter --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}"
-echo ""
-echo "Expected sizes:"
-echo "  - coin-counter:svm   ~500MB  (OpenCV + SVM models)"
-echo "  - coin-counter:dl    ~1.5GB  (includes LibTorch + CNN/ResNet)"
+echo "Expected size: ~1.5GB (OpenCV + LibTorch + CNN/ResNet)"
 echo ""
 echo "Quick start:"
-echo "  Run SVM:  ./docker-run.sh coin-counter:svm"
-echo "  Run DL:   ./docker-run.sh coin-counter:dl"
-echo "  Train:    ./docker-train.sh coin-counter:svm train_acquisition"
+echo "  Run:   ./docker-run.sh coin-counter"
+echo "  Train: ./docker-train.sh coin-counter train_acquisition"
+echo ""
+echo "Or use the convenience script:"
+echo "  ./docker-build-and-run.sh"
 echo ""

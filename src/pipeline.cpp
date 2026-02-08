@@ -126,20 +126,22 @@ namespace coin
                   cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 4);
     }
 
-    cv::rectangle(display, cv::Point(10, 10), cv::Point(280, 90), cv::Scalar(0, 0, 0), -1);
-    cv::rectangle(display, cv::Point(10, 10), cv::Point(280, 90), cv::Scalar(255, 255, 255), 2);
-    cv::putText(display, "Coins: " + std::to_string(entries.size()), cv::Point(20, 40),
-                cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+    cv::rectangle(display, cv::Point(10, 10), cv::Point(390, 130), cv::Scalar(0, 0, 0), -1);
+    cv::rectangle(display, cv::Point(10, 10), cv::Point(390, 130), cv::Scalar(255, 255, 255), 2);
+    int text_x = 20, text_y = 45;
+    cv::putText(display, "Coins: " + std::to_string(entries.size()), cv::Point(text_x, text_y),
+                cv::FONT_HERSHEY_SIMPLEX, 0.85, cv::Scalar(255, 255, 255), 2);
+    text_y += 40;
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(2) << "Total: " << ctx.clf_cache.total_eur << " EUR";
-    cv::putText(display, oss.str(), cv::Point(20, 62), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
-    cv::putText(display, "Clf: " + ctx.classifier_display_name, cv::Point(20, 82),
-                cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(200, 200, 200), 2);
+    cv::putText(display, oss.str(), cv::Point(text_x, text_y), cv::FONT_HERSHEY_SIMPLEX, 0.85, cv::Scalar(255, 255, 255), 2);
+    text_y += 40;
+    cv::putText(display, "Clf: " + ctx.classifier_display_name, cv::Point(text_x, text_y),
+                cv::FONT_HERSHEY_SIMPLEX, 0.75, cv::Scalar(200, 200, 200), 2);
 
     if (timings)
       timings->draw_rest_ms = Ms(Clock::now() - t_draw_start).count() - timings->classify_ms;
 
-    // FPS overlay
     {
       static int64_t prev_ticks = cv::getTickCount();
       int64_t ticks = cv::getTickCount();
@@ -149,8 +151,36 @@ namespace coin
                   cv::Point(display.cols - 200, 30), cv::FONT_HERSHEY_SIMPLEX, 0.9, cv::Scalar(0, 255, 0), 2);
     }
 
+    int legend_x = 10;
+    int legend_y = display.rows - 200;
+    int legend_width = 400;
+    int legend_height = 190;
+
+    if (legend_y > 0 && legend_x + legend_width < display.cols)
+    {
+      cv::Mat legend_roi = display(cv::Rect(legend_x, legend_y, legend_width, legend_height));
+      legend_roi = legend_roi * 0.6 + cv::Scalar(0, 0, 0) * 0.4;
+
+      std::vector<std::string> shortcuts = {
+          "Keyboard Controls:",
+          "  1-4: SVM/KNN/RF/NB",
+          "  5-6: CNN/ResNet18 (DL)",
+          "  t: Toggle timing info",
+          "  q: Quit"};
+
+      int y_offset = legend_y + 30;
+      for (const auto &line : shortcuts)
+      {
+        cv::putText(display, line,
+                    cv::Point(legend_x + 10, y_offset),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.65,
+                    cv::Scalar(255, 255, 255), 2);
+        y_offset += 32;
+      }
+    }
+
     auto t_disp = Clock::now();
-    cv::imshow("Anti-Glare Detection", for_display(display));
+    cv::imshow("Coin Detection", for_display(display));
     if (timings)
       timings->display_ms = Ms(Clock::now() - t_disp).count();
   }

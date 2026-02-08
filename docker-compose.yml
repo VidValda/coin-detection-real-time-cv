@@ -1,14 +1,12 @@
 version: '3.8'
 
 services:
-  coin-counter-svm:
+  coin-counter:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        BUILD_WITH_TORCH: "OFF"
-    image: coin-counter:svm
-    container_name: coin_counter_svm
+    image: coin-counter:latest
+    container_name: coin_counter
     environment:
       - DISPLAY=${DISPLAY}
       - COIN_DATA_DIR=/app/data
@@ -20,38 +18,12 @@ services:
     network_mode: host
     stdin_open: true
     tty: true
-    profiles:
-      - svm
-
-  coin-counter-dl:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        BUILD_WITH_TORCH: "ON"
-    image: coin-counter:dl
-    container_name: coin_counter_dl
-    environment:
-      - DISPLAY=${DISPLAY}
-      - COIN_DATA_DIR=/app/data
-    volumes:
-      - ./data:/app/data:ro
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-    devices:
-      - /dev/video2:/dev/video2
-    network_mode: host
-    stdin_open: true
-    tty: true
-    profiles:
-      - dl
 
   coin-counter-train:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        BUILD_WITH_TORCH: "OFF"
-    image: coin-counter:svm
+    image: coin-counter:latest
     container_name: coin_counter_train
     environment:
       - DISPLAY=${DISPLAY}

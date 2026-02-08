@@ -32,7 +32,6 @@ int main(int argc, char **argv)
   coin::init_data_root(argc, argv);
   cv::setUseOptimized(true);
 
-  // --- Camera / video source ---
   const char *test_videos[] = {coin::Config::TEST_VIDEO_1};
   const int num_test_videos = 1;
   int current_video_index = -1;
@@ -75,19 +74,20 @@ int main(int argc, char **argv)
     cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
   }
 
-  // --- Pipeline context ---
   int width_px = static_cast<int>(coin::Config::PAPER_WIDTH_MM * coin::Config::SCALE_FACTOR);
   int height_px = static_cast<int>(coin::Config::PAPER_HEIGHT_MM * coin::Config::SCALE_FACTOR);
   double ratio_px_to_mm = 1.0 / coin::Config::SCALE_FACTOR;
 
   coin::PipelineContext ctx(coin::Config::STABILIZER_WINDOW, width_px, height_px, ratio_px_to_mm);
 
-  cv::namedWindow("Coin Counter", cv::WINDOW_AUTOSIZE);
+  cv::namedWindow("Camera View", cv::WINDOW_AUTOSIZE);
+  cv::namedWindow("Coin Detection", cv::WINDOW_AUTOSIZE);
+  cv::moveWindow("Camera View", 50, 50);
+  cv::moveWindow("Coin Detection", 1050, 50);
   coin::create_debug_windows();
 
   std::cout << "Using px-to-mm ratio: " << ratio_px_to_mm << " mm/px (from SCALE_FACTOR).\n";
 
-  // --- Classifiers ---
   coin::SVMClassifier svm_classifiers[4];
 #ifdef COIN_USE_TORCH
   coin::TorchClassifier torch_cnn, torch_resnet;
@@ -168,7 +168,6 @@ int main(int argc, char **argv)
   std::cout << "Timings: " << (ctx.print_timings ? "ON" : "OFF") << " (press 't' to toggle)\n"
             << std::endl;
 
-  // --- Main loop ---
   while (true)
   {
     auto frame_start = Clock::now();
@@ -202,6 +201,8 @@ int main(int argc, char **argv)
     try
     {
       coin::process_frame(ctx, frame, &timings);
+
+      cv::imshow("Camera View", coin::for_display(frame));
 
       timings.total_frame_ms = Ms(Clock::now() - frame_start).count();
       if (ctx.print_timings)

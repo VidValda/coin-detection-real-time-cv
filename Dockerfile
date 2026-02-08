@@ -1,6 +1,5 @@
 FROM ubuntu:22.04 AS builder
 
-ARG BUILD_WITH_TORCH=OFF
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
@@ -19,16 +18,8 @@ COPY include/ ./include/
 COPY src/ ./src/
 COPY build_with_torch.sh ./
 
-RUN if [ "$BUILD_WITH_TORCH" = "ON" ]; then \
-        echo "Building with LibTorch support..." && \
-        bash build_with_torch.sh; \
-    else \
-        echo "Building SVM-only variant..." && \
-        mkdir -p build && cd build && \
-        cmake .. -DCMAKE_BUILD_TYPE=Release && \
-        make -j$(nproc); \
-    fi && \
-    mkdir -p /build/build/libtorch/lib
+RUN echo "Building with LibTorch support..." && \
+    bash build_with_torch.sh
 
 FROM ubuntu:22.04 AS runtime-base
 
@@ -46,7 +37,6 @@ RUN apt-get update && apt-get install -y \
 
 FROM runtime-base AS runtime
 
-ARG BUILD_WITH_TORCH=OFF
 ARG USERNAME=coinuser
 ARG USER_UID=1000
 ARG USER_GID=1000

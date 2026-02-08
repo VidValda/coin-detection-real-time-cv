@@ -4,7 +4,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_DIR="${SCRIPT_DIR}/data"
-IMAGE="${1:-coin-counter:svm}"
+IMAGE="${1:-coin-counter:latest}"
 CMD="${2:-train_acquisition}"
 CAMERA_DEV="${CAMERA_DEV:-/dev/video2}"
 
