@@ -33,8 +33,8 @@ int main(int argc, char **argv)
   cv::setUseOptimized(true);
 
   // --- Camera / video source ---
-  const char *test_videos[] = {coin::Config::TEST_VIDEO_1, coin::Config::TEST_VIDEO_2};
-  const int num_test_videos = 2;
+  const char *test_videos[] = {coin::Config::TEST_VIDEO_1};
+  const int num_test_videos = 1;
   int current_video_index = -1;
 
   cv::VideoCapture cap;
