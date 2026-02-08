@@ -1,0 +1,12 @@
+# Data directory layout
+
+All runtime data lives under `data/` so that `build/` contains only build artifacts.
+
+- **models/** — Calibration, classifier YAMLs, and PyTorch models (`.pt`, `*_traced.pt`). Written by `camera_calibration`, `train_svm` / `train_classifier.py`, and `export_torchscript.py`.
+- **training_data/** — Legacy per-class crop images (from `train_acquisition`).
+- **training_data_2/** — Full-frame images + JSON labels + manifest for DL training and `train_svm`. Used by the notebook and Python trainer.
+- **videos/** — Test videos (e.g. `test1.mp4`, `test2.mp4`) when using `USE_TEST_VIDEOS` in config.
+
+Run C++ binaries from the project root with the data root set, e.g.:
+  COIN_DATA_DIR=./data ./build/coin_counter_dl
+or pass the path as first argument: ./build/coin_counter ./data

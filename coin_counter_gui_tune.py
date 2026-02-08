@@ -14,7 +14,8 @@ import cv2
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parent
-BUILD_DIR = REPO_ROOT / "coin_counter_cpp" / "build"
+DATA_DIR = REPO_ROOT / "data"
+MODELS_DIR = DATA_DIR / "models"
 CLASSIFIER_MODEL_NAMES = ["coin_svm.yaml", "coin_knn.yaml", "coin_rtrees.yaml", "coin_nb.yaml"]
 CLASSIFIER_NAMES = ["SVM", "KNN", "RandomForest", "NaiveBayes"]
 SCALER_NAME = "coin_scaler.yaml"
@@ -64,7 +65,7 @@ def default_params() -> dict:
         "frame_width": 1280,
         "frame_height": 720,
         "inner_radius_frac": 0.7,
-        "build_dir": str(BUILD_DIR),
+        "build_dir": str(MODELS_DIR),
         "calibration_path": "",
         "classifier_index": 0,
         "show_debug": True,
@@ -703,7 +704,7 @@ def main_gui() -> None:
     root.title("Coin counter — tune parameters (same as C++)")
     root.geometry("420x820")
     calibration_path_var = tk.StringVar()
-    for path in [str(BUILD_DIR / "coin_calibration_robust.yaml"), "coin_calibration_robust.pkl", "coin_calibration_robust.yaml"]:
+    for path in [str(MODELS_DIR / "coin_calibration_robust.yaml"), "coin_calibration_robust.pkl", "coin_calibration_robust.yaml"]:
         if os.path.isfile(path):
             calibration_path_var.set(path)
             set_param("calibration_path", path)

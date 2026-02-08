@@ -25,7 +25,7 @@ From the project root, either:
   ```
   If your project path contains spaces, use a path without spaces for LibTorch (e.g. `-DCMAKE_PREFIX_PATH=/tmp/libtorch` with a symlink to the real path).
 
-Then run `python export_torchscript.py` from the project root to generate `coin_cnn_traced.pt` and `coin_resnet18_traced.pt`. In `coin_counter`, keys `5`/`6` switch to CNN/ResNet18.
+Then run `python export_torchscript.py` from the project root to generate `coin_cnn_traced.pt` and `coin_resnet18_traced.pt` in `data/models/`. In `coin_counter`, keys `5`/`6` switch to CNN/ResNet18.
 
 **If CNN/ResNet fail to load** with "maximum supported version for reading is 1": your LibTorch is too old. Delete `build/libtorch` and run `./build_with_torch.sh` again (it downloads LibTorch 2.5.1 by default).
 
@@ -33,20 +33,30 @@ Then run `python export_torchscript.py` from the project root to generate `coin_
 
 ## Executables
 
-Run from `build/`; press `q` to quit unless noted.
+Run from the project root with the data directory set (or from `data/` with `../build/<exe>`). Press `q` to quit unless noted.
 
-- **coin_counter** — Live coin detection and tracking. Uses calibration and a classifier (SVM, KNN, RandomForest, NaiveBayes). Keys `1`–`4` switch classifier; shows total EUR and optional debug histogram.
-- **train_acquisition** — Capture labeled crops by zone (6 euro classes, randomized). Writes images under `training_data/` and appends to the training manifest. Keys: `c` capture, `q` quit.
-- **train_svm** — Train SVM from the training manifest, save model and scaler. Keys: `s` train and save, `q` quit.
-- **camera_calibration** — Capture diameter samples by zone, fit radial and tilt distortion, save calibration. Keys: `c` capture, `s` solve and save, `q` quit.
+```bash
+# From project root (recommended):
+COIN_DATA_DIR=./data ./build/coin_counter
+COIN_DATA_DIR=./data ./build/coin_counter_dl
+# Or pass data path as first argument:
+./build/coin_counter ./data
+```
+
+- **coin_counter** — Live coin detection and tracking. Uses calibration and a classifier (SVM, KNN, RandomForest, NaiveBayes). Keys `1`–`4` switch classifier; `5`/`6` for CNN/ResNet18 when built with LibTorch.
+- **coin_counter_dl** — DL-only pipeline (CNN/ResNet18). Keys `1`/`2` switch model.
+- **train_acquisition** — Capture labeled crops by zone (6 euro classes, randomized). Writes to `data/training_data_2/` (images + labels + manifest). Keys: `c` capture, `q` quit.
+- **train_svm** — Train SVM and other OpenCV classifiers from the manifest; saves models and scaler to `data/models/`. Keys: `s` train and save, `q` quit.
+- **camera_calibration** — Capture diameter samples by zone, save calibration to `data/models/coin_calibration_robust.yaml`. Keys: `c` capture, `s` solve and save, `q` quit.
 
 ---
 
-## Data files
+## Data directory
 
-- **coin_calibration_robust.yaml** — From `camera_calibration` (base ratio, radial k, tilt p_y, p_x).
-- **coin_svm.yaml**, **coin_scaler.yaml** — From `train_svm` (model and 4-feature scaler).
-- **classifier_default.txt** — Optional; single digit 0–3 for default classifier index.
-- **training_data/** — Images and manifest produced by `train_acquisition`, consumed by `train_svm`.
+All runtime data lives under **`data/`** (see `data/README`):
 
-All paths are relative to the current working directory.
+- **data/models/** — Calibration YAML, classifier YAMLs, `coin_*.pt` and traced models. Produced by `camera_calibration`, `train_svm` / `train_classifier.py`, and `export_torchscript.py`.
+- **data/training_data_2/** — Images, JSON labels, and manifest for DL training and `train_svm`.
+- **data/videos/** — Test videos (e.g. `test1.mp4`, `test2.mp4`) when `USE_TEST_VIDEOS` is enabled in `include/config.hpp`.
+
+Set `COIN_DATA_DIR` to the path of `data` (or pass it as the first argument to any executable). If unset, binaries look for paths relative to the current working directory (e.g. run from `data/` with `../build/coin_counter`).

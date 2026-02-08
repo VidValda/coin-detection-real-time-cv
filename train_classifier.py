@@ -5,8 +5,9 @@ import numpy as np
 import cv2
 
 REPO_ROOT = Path(__file__).resolve().parent
-OUT_DIR = REPO_ROOT / "build"
-TRAINING_BASE = OUT_DIR / "training_data_2"
+DATA_DIR = REPO_ROOT / "data"
+MODELS_DIR = DATA_DIR / "models"
+TRAINING_BASE = DATA_DIR / "training_data_2"
 MANIFEST_PATH = TRAINING_BASE / "manifest.csv"
 
 CLASSIFIER_MODEL_NAMES = ["coin_svm.yaml", "coin_knn.yaml", "coin_rtrees.yaml", "coin_nb.yaml"]
@@ -218,21 +219,21 @@ def main() -> int:
     rtrees.train(full_train_data)
     nb.train(full_train_data)
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    model_paths = [OUT_DIR / name for name in CLASSIFIER_MODEL_NAMES]
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    model_paths = [MODELS_DIR / name for name in CLASSIFIER_MODEL_NAMES]
     svm.save(str(model_paths[0]))
     knn.save(str(model_paths[1]))
     rtrees.save(str(model_paths[2]))
     nb.save(str(model_paths[3]))
 
-    scaler_full_path = OUT_DIR / SCALER_PATH
+    scaler_full_path = MODELS_DIR / SCALER_PATH
     fs = cv2.FileStorage(str(scaler_full_path), cv2.FILE_STORAGE_WRITE)
     fs.write("mean", mean)
     fs.write("scale", scale)
     fs.write("model_type", MODEL_TYPE_NAMES[save_idx])
     fs.release()
 
-    default_path = OUT_DIR / DEFAULT_FILE
+    default_path = MODELS_DIR / DEFAULT_FILE
     with open(default_path, "w") as f:
         f.write(f"{save_idx}\n")
 

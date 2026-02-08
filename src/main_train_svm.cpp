@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "data_path.hpp"
 #include "coin_detector.hpp"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
@@ -76,10 +77,11 @@ namespace
 
 }
 
-int main()
+int main(int argc, char **argv)
 {
-  std::string training_dir = coin::Config::TRAINING_DATA_DIR;
-  std::string manifest_path = coin::Config::TRAINING_MANIFEST;
+  coin::init_data_root(argc, argv);
+  std::string training_dir = coin::data_path(coin::Config::TRAINING_DATA_DIR);
+  std::string manifest_path = coin::data_path(coin::Config::TRAINING_MANIFEST);
 
   std::vector<ManifestRow> manifest = load_manifest(manifest_path);
   if (manifest.empty())
@@ -253,18 +255,18 @@ int main()
   knn->train(full_data);
   rtrees->train(full_data);
   nb->train(full_data);
-  svm->save(coin::Config::CLASSIFIER_MODEL_PATHS[0]);
-  knn->save(coin::Config::CLASSIFIER_MODEL_PATHS[1]);
-  rtrees->save(coin::Config::CLASSIFIER_MODEL_PATHS[2]);
-  nb->save(coin::Config::CLASSIFIER_MODEL_PATHS[3]);
+  svm->save(coin::data_path(coin::Config::CLASSIFIER_MODEL_PATHS[0]));
+  knn->save(coin::data_path(coin::Config::CLASSIFIER_MODEL_PATHS[1]));
+  rtrees->save(coin::data_path(coin::Config::CLASSIFIER_MODEL_PATHS[2]));
+  nb->save(coin::data_path(coin::Config::CLASSIFIER_MODEL_PATHS[3]));
 
-  cv::FileStorage fs(coin::Config::SVM_SCALER_PATH, cv::FileStorage::WRITE);
+  cv::FileStorage fs(coin::data_path(coin::Config::SVM_SCALER_PATH), cv::FileStorage::WRITE);
   fs << "mean" << mean;
   fs << "scale" << scale;
   fs << "model_type" << names[save_idx];
   fs.release();
 
-  std::ofstream default_file(coin::Config::CLASSIFIER_DEFAULT_FILE);
+  std::ofstream default_file(coin::data_path(coin::Config::CLASSIFIER_DEFAULT_FILE));
   if (default_file)
     default_file << save_idx << "\n";
   std::cout << "Saved all 4 models. Active (default): " << names[save_idx] << " ("

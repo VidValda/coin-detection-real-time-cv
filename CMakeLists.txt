@@ -30,6 +30,7 @@ set(OPENCV_LIBS_COIN opencv_core opencv_imgproc opencv_videoio opencv_highgui op
 
 set(COMMON_SOURCES
   src/calibration.cpp
+  src/data_path.cpp
   src/svm_classifier.cpp
   src/corner_stabilizer.cpp
   src/coin_track.cpp
@@ -57,6 +58,7 @@ target_link_libraries(coin_counter PRIVATE coin_common)
 if(Torch_FOUND)
   set(COIN_DL_SOURCES
     src/calibration.cpp
+    src/data_path.cpp
     src/corner_stabilizer.cpp
     src/coin_track.cpp
     src/coin_tracker.cpp

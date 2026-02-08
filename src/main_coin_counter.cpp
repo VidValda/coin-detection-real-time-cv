@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "data_path.hpp"
 #include "calibration.hpp"
 #include "svm_classifier.hpp"
 #include "corner_stabilizer.hpp"
@@ -83,7 +84,7 @@ namespace
 
   int read_default_classifier_index()
   {
-    std::ifstream f(coin::Config::CLASSIFIER_DEFAULT_FILE);
+    std::ifstream f(coin::data_path(coin::Config::CLASSIFIER_DEFAULT_FILE));
     int idx = 0;
     int max_idx =
 #ifdef COIN_USE_TORCH
@@ -289,8 +290,9 @@ namespace
 
 }
 
-int main()
+int main(int argc, char **argv)
 {
+  coin::init_data_root(argc, argv);
   cv::setUseOptimized(true);
 
   const char *test_videos_init[] = {coin::Config::TEST_VIDEO_1, coin::Config::TEST_VIDEO_2};
@@ -302,7 +304,7 @@ int main()
   {
     for (; first_video_index < num_test_videos_init; ++first_video_index)
     {
-      cap.open(test_videos_init[first_video_index]);
+      cap.open(coin::data_path(test_videos_init[first_video_index]));
       if (cap.isOpened())
       {
         std::cout << "Using test video: " << test_videos_init[first_video_index] << "\n";
@@ -350,8 +352,8 @@ int main()
   {
     if (idx < 0 || idx > 3)
       return true;
-    return svm.load(coin::Config::CLASSIFIER_MODEL_PATHS[idx],
-                    coin::Config::SVM_SCALER_PATH,
+    return svm.load(coin::data_path(coin::Config::CLASSIFIER_MODEL_PATHS[idx]),
+                    coin::data_path(coin::Config::SVM_SCALER_PATH),
                     coin::Config::CLASSIFIER_NAMES[idx]);
   };
   auto ensure_classifier = [&]()
@@ -372,7 +374,7 @@ int main()
 #ifdef COIN_USE_TORCH
     else if (classifier_index == 4)
     {
-      if (!torch_cnn.is_loaded() && !torch_cnn.load(coin::Config::COIN_CNN_TRACED_PATH))
+      if (!torch_cnn.is_loaded() && !torch_cnn.load(coin::data_path(coin::Config::COIN_CNN_TRACED_PATH)))
       {
         std::cerr << "Could not load CNN. Run: python export_torchscript.py\n";
         return false;
@@ -381,7 +383,7 @@ int main()
     }
     else if (classifier_index == 5)
     {
-      if (!torch_resnet.is_loaded() && !torch_resnet.load(coin::Config::COIN_RESNET18_TRACED_PATH))
+      if (!torch_resnet.is_loaded() && !torch_resnet.load(coin::data_path(coin::Config::COIN_RESNET18_TRACED_PATH)))
       {
         std::cerr << "Could not load ResNet18. Run: python export_torchscript.py\n";
         return false;
@@ -424,7 +426,7 @@ int main()
       {
         cap.release();
         ++current_video_index;
-        cap.open(test_videos[current_video_index]);
+        cap.open(coin::data_path(test_videos[current_video_index]));
         if (cap.isOpened())
         {
           std::cout << "Next test video: " << test_videos[current_video_index] << "\n";

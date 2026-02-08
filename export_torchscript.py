@@ -1,6 +1,10 @@
 import torch
 import torch.nn as nn
+from pathlib import Path
 from torchvision.models import resnet18
+
+REPO_ROOT = Path(__file__).resolve().parent
+MODELS_DIR = REPO_ROOT / "data" / "models"
 
 NUM_CLASSES = 6
 CROP_SIZE = 150
@@ -33,23 +37,24 @@ def main():
     example = torch.rand(1, 3, CROP_SIZE, CROP_SIZE, device=device)
 
     load_kw = {"map_location": device}
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    ckpt = torch.load("coin_cnn.pt", **load_kw)
+    ckpt = torch.load(str(MODELS_DIR / "coin_cnn.pt"), **load_kw)
     model_cnn = SmallCNN(num_classes=NUM_CLASSES)
     model_cnn.load_state_dict(ckpt["model_state"], strict=True)
     model_cnn.eval()
     traced_cnn = torch.jit.trace(model_cnn, example)
-    traced_cnn.save("coin_cnn_traced.pt")
-    print("Saved coin_cnn_traced.pt")
+    traced_cnn.save(str(MODELS_DIR / "coin_cnn_traced.pt"))
+    print("Saved", MODELS_DIR / "coin_cnn_traced.pt")
 
-    ckpt = torch.load("coin_resnet18.pt", **load_kw)
+    ckpt = torch.load(str(MODELS_DIR / "coin_resnet18.pt"), **load_kw)
     model_resnet = resnet18(weights=None)
     model_resnet.fc = nn.Linear(model_resnet.fc.in_features, NUM_CLASSES)
     model_resnet.load_state_dict(ckpt["model_state"], strict=True)
     model_resnet.eval()
     traced_resnet = torch.jit.trace(model_resnet, example)
-    traced_resnet.save("coin_resnet18_traced.pt")
-    print("Saved coin_resnet18_traced.pt")
+    traced_resnet.save(str(MODELS_DIR / "coin_resnet18_traced.pt"))
+    print("Saved", MODELS_DIR / "coin_resnet18_traced.pt")
 
 
 if __name__ == "__main__":

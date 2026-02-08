@@ -46,21 +46,21 @@ namespace coin
         static constexpr const char *CSV_PATH = "coin_data.csv";
         static constexpr int CSV_TARGET_POINTS = 3000;
 
-        static constexpr const char *CALIBRATION_PATH = "coin_calibration_robust.yaml";
-        static constexpr const char *SVM_MODEL_PATH = "coin_svm.yaml";
-        static constexpr const char *SVM_SCALER_PATH = "coin_scaler.yaml";
+        static constexpr const char *CALIBRATION_PATH = "models/coin_calibration_robust.yaml";
+        static constexpr const char *SVM_MODEL_PATH = "models/coin_svm.yaml";
+        static constexpr const char *SVM_SCALER_PATH = "models/coin_scaler.yaml";
         static constexpr const char *CLASSIFIER_MODEL_PATHS[4] = {
-            "coin_svm.yaml", "coin_knn.yaml", "coin_rtrees.yaml", "coin_nb.yaml"};
+            "models/coin_svm.yaml", "models/coin_knn.yaml", "models/coin_rtrees.yaml", "models/coin_nb.yaml"};
         static constexpr const char *CLASSIFIER_NAMES[6] = {"SVM", "KNN", "RandomForest", "NaiveBayes", "CNN", "ResNet18"};
-        static constexpr const char *CLASSIFIER_DEFAULT_FILE = "classifier_default.txt";
-        static constexpr const char *COIN_CNN_TRACED_PATH = "coin_cnn_traced.pt";
-        static constexpr const char *COIN_RESNET18_TRACED_PATH = "coin_resnet18_traced.pt";
+        static constexpr const char *CLASSIFIER_DEFAULT_FILE = "models/classifier_default.txt";
+        static constexpr const char *COIN_CNN_TRACED_PATH = "models/coin_cnn_traced.pt";
+        static constexpr const char *COIN_RESNET18_TRACED_PATH = "models/coin_resnet18_traced.pt";
         static constexpr int COIN_CROP_SIZE = 150;
         static constexpr const char *TRAINING_DATA_DIR = "training_data_2";
         static constexpr const char *TRAINING_MANIFEST = "training_data_2/manifest.csv";
 
-        static constexpr const char *TEST_VIDEO_1 = "test1.mp4";
-        static constexpr const char *TEST_VIDEO_2 = "test2.mp4";
+        static constexpr const char *TEST_VIDEO_1 = "videos/test1.mp4";
+        static constexpr const char *TEST_VIDEO_2 = "videos/test2.mp4";
         static constexpr bool USE_TEST_VIDEOS = false;
 
         static constexpr double PAPER_WIDTH_MM = 330.0;

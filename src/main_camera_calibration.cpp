@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "data_path.hpp"
 #include "corner_stabilizer.hpp"
 #include "coin_tracker.hpp"
 #include "coin_detector.hpp"
@@ -71,8 +72,9 @@ namespace
 
 }
 
-int main()
+int main(int argc, char **argv)
 {
+  coin::init_data_root(argc, argv);
   cv::VideoCapture cap(2, cv::CAP_V4L2);
   cap.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
   cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
@@ -210,7 +212,7 @@ int main()
         std::cout << "ratio_px_to_mm: " << ratio_px_to_mm << " mm/px\n";
         std::cout << "SCALE_FACTOR (px/mm): " << scale_factor << " (use in Config if needed)\n";
 
-        cv::FileStorage fs(coin::Config::CALIBRATION_PATH, cv::FileStorage::WRITE);
+        cv::FileStorage fs(coin::data_path(coin::Config::CALIBRATION_PATH), cv::FileStorage::WRITE);
         fs << "ratio_px_to_mm" << ratio_px_to_mm;
         fs.release();
         std::cout << "Saved '" << coin::Config::CALIBRATION_PATH << "' (ratio only).\n";

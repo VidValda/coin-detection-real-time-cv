@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "data_path.hpp"
 #include "calibration.hpp"
 #include "corner_stabilizer.hpp"
 #include "coin_tracker.hpp"
@@ -150,8 +151,9 @@ namespace
 
 }
 
-int main()
+int main(int argc, char **argv)
 {
+  coin::init_data_root(argc, argv);
   cv::VideoCapture cap(2, cv::CAP_V4L2);
   cap.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
   cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
@@ -161,7 +163,7 @@ int main()
   int current_sequence = 0;
   std::vector<Zone> zones = build_zones_for_sequence(current_sequence);
 
-  const std::string base_dir(coin::Config::TRAINING_DATA_DIR);
+  const std::string base_dir(coin::data_path(coin::Config::TRAINING_DATA_DIR));
   const std::string images_dir = base_dir + "/" + IMAGES_DIR;
   const std::string labels_dir = base_dir + "/" + LABELS_DIR;
   ensure_training_dirs(base_dir);
@@ -185,7 +187,7 @@ int main()
   int default_classifier = 0;
   auto write_default_classifier = [](int idx)
   {
-    std::ofstream f(coin::Config::CLASSIFIER_DEFAULT_FILE);
+    std::ofstream f(coin::data_path(coin::Config::CLASSIFIER_DEFAULT_FILE));
     if (f)
       f << idx << "\n";
   };

@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "data_path.hpp"
 #include "calibration.hpp"
 #include "corner_stabilizer.hpp"
 #include "coin_tracker.hpp"
@@ -225,8 +226,9 @@ namespace
   }
 }
 
-int main()
+int main(int argc, char **argv)
 {
+  coin::init_data_root(argc, argv);
   cv::setUseOptimized(true);
 
   const char *test_videos_init[] = {coin::Config::TEST_VIDEO_1, coin::Config::TEST_VIDEO_2};
@@ -238,7 +240,7 @@ int main()
   {
     for (; first_video_index < num_test_videos_init; ++first_video_index)
     {
-      cap.open(test_videos_init[first_video_index]);
+      cap.open(coin::data_path(test_videos_init[first_video_index]));
       if (cap.isOpened())
       {
         std::cout << "Using test video: " << test_videos_init[first_video_index] << "\n";
@@ -277,9 +279,6 @@ int main()
   cv::Mat dst_corners = (cv::Mat_<float>(4, 2) << 0, 0, width_px - 1, 0, width_px - 1, height_px - 1, 0, height_px - 1);
 
   static constexpr const char *DL_NAMES[2] = {"CNN", "ResNet18"};
-  static constexpr const char *DL_PATHS[2] = {
-      coin::Config::COIN_CNN_TRACED_PATH,
-      coin::Config::COIN_RESNET18_TRACED_PATH};
   coin::TorchClassifier torch_cnn, torch_resnet;
   int classifier_index = 0;
 
@@ -287,7 +286,7 @@ int main()
   {
     if (classifier_index == 0)
     {
-      if (!torch_cnn.is_loaded() && !torch_cnn.load(DL_PATHS[0]))
+      if (!torch_cnn.is_loaded() && !torch_cnn.load(coin::data_path(coin::Config::COIN_CNN_TRACED_PATH)))
       {
         std::cerr << "Could not load CNN. Run: python export_torchscript.py\n";
         return false;
@@ -296,7 +295,7 @@ int main()
     }
     if (classifier_index == 1)
     {
-      if (!torch_resnet.is_loaded() && !torch_resnet.load(DL_PATHS[1]))
+      if (!torch_resnet.is_loaded() && !torch_resnet.load(coin::data_path(coin::Config::COIN_RESNET18_TRACED_PATH)))
       {
         std::cerr << "Could not load ResNet18. Run: python export_torchscript.py\n";
         return false;
@@ -337,7 +336,7 @@ int main()
       {
         cap.release();
         ++current_video_index;
-        cap.open(test_videos[current_video_index]);
+        cap.open(coin::data_path(test_videos[current_video_index]));
         if (cap.isOpened())
         {
           std::cout << "Next test video: " << test_videos[current_video_index] << "\n";
