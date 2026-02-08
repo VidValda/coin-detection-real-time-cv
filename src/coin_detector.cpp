@@ -417,22 +417,27 @@ namespace coin
     std::vector<cv::Point2f> pts(4);
     for (int i = 0; i < 4; ++i)
       pts[i] = cv::Point2f(corners.at<float>(i, 0), corners.at<float>(i, 1));
-    std::sort(pts.begin(), pts.end(), [](const cv::Point2f &a, const cv::Point2f &b)
-              { return a.y < b.y; });
-    cv::Point2f top0 = pts[0], top1 = pts[1], bot0 = pts[2], bot1 = pts[3];
-    if (top0.x > top1.x)
-      std::swap(top0, top1);
-    if (bot0.x > bot1.x)
-      std::swap(bot0, bot1);
+    float cx = 0, cy = 0;
+    for (const auto &p : pts)
+    {
+      cx += p.x;
+      cy += p.y;
+    }
+    cx /= 4.f;
+    cy /= 4.f;
+    std::sort(pts.begin(), pts.end(), [cx, cy](const cv::Point2f &a, const cv::Point2f &b)
+              { return std::atan2(a.y - cy, a.x - cx) < std::atan2(b.y - cy, b.x - cx); });
+    int tl = 0;
+    for (int i = 1; i < 4; ++i)
+      if (pts[i].x + pts[i].y < pts[tl].x + pts[tl].y)
+        tl = i;
     cv::Mat rect(4, 2, CV_32F);
-    rect.at<float>(0, 0) = top0.x;
-    rect.at<float>(0, 1) = top0.y;
-    rect.at<float>(1, 0) = top1.x;
-    rect.at<float>(1, 1) = top1.y;
-    rect.at<float>(2, 0) = bot1.x;
-    rect.at<float>(2, 1) = bot1.y;
-    rect.at<float>(3, 0) = bot0.x;
-    rect.at<float>(3, 1) = bot0.y;
+    for (int i = 0; i < 4; ++i)
+    {
+      const auto &p = pts[(tl + i) % 4];
+      rect.at<float>(i, 0) = p.x;
+      rect.at<float>(i, 1) = p.y;
+    }
     return rect;
   }
 

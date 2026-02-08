@@ -122,13 +122,14 @@ def find_paper_corners(frame: np.ndarray, p: dict) -> Optional[np.ndarray]:
 
 
 def order_corners(corners: np.ndarray) -> np.ndarray:
-    y_sorted = corners[np.argsort(corners[:, 1])]
-    top, bottom = y_sorted[:2], y_sorted[2:]
+    cx, cy = corners[:, 0].mean(), corners[:, 1].mean()
+    angles = np.arctan2(corners[:, 1] - cy, corners[:, 0] - cx)
+    order = np.argsort(angles)
+    pts = corners[order]
+    tl = np.argmin(pts[:, 0] + pts[:, 1])
     rect = np.zeros((4, 2), dtype=np.float32)
-    rect[0] = top[np.argmin(top[:, 0])]
-    rect[1] = top[np.argmax(top[:, 0])]
-    rect[3] = bottom[np.argmin(bottom[:, 0])]
-    rect[2] = bottom[np.argmax(bottom[:, 0])]
+    for i in range(4):
+        rect[i] = pts[(tl + i) % 4]
     return rect
 
 
