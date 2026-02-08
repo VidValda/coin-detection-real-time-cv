@@ -154,7 +154,9 @@ namespace
 int main(int argc, char **argv)
 {
   coin::init_data_root(argc, argv);
-  cv::VideoCapture cap(2, cv::CAP_V4L2);
+  int camera_index = 2;
+  if (argc > 2) { try { camera_index = std::stoi(argv[2]); } catch (...) {} }
+  cv::VideoCapture cap(camera_index, cv::CAP_V4L2);
   cap.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
   cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
 

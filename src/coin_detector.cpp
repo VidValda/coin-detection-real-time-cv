@@ -12,6 +12,8 @@ namespace coin
 
   static int ensure_odd(int k) { return std::max(1, k | 1); }
 
+  // --- Workspace caches (avoid per-frame allocations) ---
+
   struct DetectionWorkspace
   {
     cv::Size size{0, 0};
@@ -30,7 +32,7 @@ namespace coin
       }
     }
   };
-  static DetectionWorkspace s_workspace;
+  static thread_local DetectionWorkspace s_workspace;
 
   struct MorphCache
   {
@@ -55,7 +57,9 @@ namespace coin
       }
     }
   };
-  static MorphCache s_morph;
+  static thread_local MorphCache s_morph;
+
+  // --- Channel extraction ---
 
   static cv::Mat get_channel(const cv::Mat &frame, int mode)
   {
@@ -78,6 +82,8 @@ namespace coin
     cv::extractChannel(lab, ch, mode - 4);
     return ch;
   }
+
+  // --- Preprocessing ---
 
   static cv::Mat preprocess_for_watershed(const cv::Mat &frame)
   {
@@ -148,17 +154,10 @@ namespace coin
     return Detection{cv::Point2i(static_cast<int>(center.x), static_cast<int>(center.y)), diameter_mm};
   }
 
-  Detections detect_and_measure_coins(const cv::Mat &frame, double ratio_px_to_mm,
-                                      DebugViews *out_debug, double pixel_scale)
+  // --- Watershed pipeline: broken into stages ---
+
+  static void threshold_and_morph(const cv::Mat &blurred, double pixel_scale)
   {
-    if (pixel_scale <= 0)
-      pixel_scale = 1.0;
-    const double min_contour_area = Config::MIN_CONTOUR_AREA * pixel_scale * pixel_scale;
-    const int rows = frame.rows, cols = frame.cols;
-    s_workspace.ensure_size(rows, cols);
-
-    cv::Mat blurred = preprocess_for_watershed(frame);
-
     if (Config::USE_ADAPTIVE)
     {
       int block = ensure_odd(std::max(3, std::min(51, Config::ADAPTIVE_BLOCK)));
@@ -181,7 +180,11 @@ namespace coin
                      cv::Point(-1, -1), std::max(0, Config::MORPH_OPEN_ITERS));
     cv::morphologyEx(s_workspace.binary, s_workspace.binary, cv::MORPH_CLOSE, s_morph.k_close_el,
                      cv::Point(-1, -1), std::max(0, Config::MORPH_CLOSE_ITERS));
+  }
 
+  // Returns num_labels from connected components; 0 means no foreground found
+  static int compute_watershed_markers(DebugViews *out_debug)
+  {
     cv::dilate(s_workspace.binary, s_workspace.sure_bg, s_morph.k_bg_el);
 
     int dsize = (Config::DIST_MASK_SIZE >= 4) ? 5 : 3;
@@ -196,7 +199,7 @@ namespace coin
       dist_norm.convertTo(out_debug->dist_vis, CV_8UC1);
     }
     if (dist_max <= 0)
-      return {};
+      return 0;
 
     double frac = std::max(0.2, std::min(0.6, Config::WATERSHED_FG_FRAC));
     cv::threshold(s_workspace.dist, s_workspace.sure_fg, frac * dist_max, 255, cv::THRESH_BINARY);
@@ -227,14 +230,14 @@ namespace coin
       out_debug->markers_vis = markers_vis;
     }
 
-    cv::cvtColor(s_workspace.binary, s_workspace.watershed_input, cv::COLOR_GRAY2BGR);
-    cv::Mat markers_out = s_workspace.markers.clone();
-    cv::watershed(s_workspace.watershed_input, markers_out);
+    return num_labels;
+  }
 
-    std::vector<Detection> detections;
+  struct LabelBounds { int x0, y0, x1, y1; };
 
-    struct LabelInfo { int x0, y0, x1, y1; };
-    std::vector<LabelInfo> label_bounds(num_labels + 1, {cols, rows, 0, 0});
+  static std::vector<LabelBounds> compute_label_bounds(const cv::Mat &markers_out, int num_labels, int cols, int rows)
+  {
+    std::vector<LabelBounds> bounds(num_labels + 1, {cols, rows, 0, 0});
     for (int r = 0; r < markers_out.rows; ++r)
     {
       const int *mr = markers_out.ptr<int>(r);
@@ -243,7 +246,7 @@ namespace coin
         int lbl = mr[c];
         if (lbl >= 2 && lbl <= num_labels)
         {
-          auto &bb = label_bounds[lbl];
+          auto &bb = bounds[lbl];
           if (c < bb.x0) bb.x0 = c;
           if (c > bb.x1) bb.x1 = c;
           if (r < bb.y0) bb.y0 = r;
@@ -251,12 +254,21 @@ namespace coin
         }
       }
     }
+    return bounds;
+  }
+
+  static Detections extract_detections_from_watershed(const cv::Mat &frame, const cv::Mat &markers_out,
+                                                      int num_labels, double ratio_px_to_mm,
+                                                      double min_contour_area, DebugViews *out_debug)
+  {
+    const int cols = frame.cols, rows = frame.rows;
+    auto label_bounds = compute_label_bounds(markers_out, num_labels, cols, rows);
 
     cv::Mat segmentation_vis;
     std::vector<cv::Vec3b> seg_palette;
     if (out_debug)
     {
-      segmentation_vis = cv::Mat(frame.rows, frame.cols, CV_8UC3);
+      segmentation_vis = cv::Mat(rows, cols, CV_8UC3);
       segmentation_vis.setTo(cv::Scalar(180, 180, 180));
       if (frame.channels() == 3)
         cv::addWeighted(segmentation_vis, 0.5, frame, 0.5, 0, segmentation_vis);
@@ -273,6 +285,7 @@ namespace coin
         seg_palette[lid] = cv::Vec3b(static_cast<uchar>(u_p(rng_p)), static_cast<uchar>(u_p(rng_p)), static_cast<uchar>(u_p(rng_p)));
     }
 
+    std::vector<Detection> detections;
     for (int label = 2; label <= num_labels; ++label)
     {
       const auto &bb = label_bounds[label];
@@ -327,6 +340,11 @@ namespace coin
     if (out_debug && !segmentation_vis.empty())
       out_debug->segmentation = segmentation_vis;
 
+    return detections;
+  }
+
+  static Detections deduplicate_detections(const Detections &detections)
+  {
     Detections kept;
     for (const auto &d : detections)
     {
@@ -346,6 +364,35 @@ namespace coin
     }
     return kept;
   }
+
+  // --- Main detection entry point ---
+
+  Detections detect_and_measure_coins(const cv::Mat &frame, double ratio_px_to_mm,
+                                      DebugViews *out_debug, double pixel_scale)
+  {
+    if (pixel_scale <= 0)
+      pixel_scale = 1.0;
+    const double min_contour_area = Config::MIN_CONTOUR_AREA * pixel_scale * pixel_scale;
+    s_workspace.ensure_size(frame.rows, frame.cols);
+
+    cv::Mat blurred = preprocess_for_watershed(frame);
+    threshold_and_morph(blurred, pixel_scale);
+
+    int num_labels = compute_watershed_markers(out_debug);
+    if (num_labels <= 0)
+      return {};
+
+    cv::cvtColor(s_workspace.binary, s_workspace.watershed_input, cv::COLOR_GRAY2BGR);
+    cv::Mat markers_out = s_workspace.markers.clone();
+    cv::watershed(s_workspace.watershed_input, markers_out);
+
+    auto detections = extract_detections_from_watershed(
+        frame, markers_out, num_labels, ratio_px_to_mm, min_contour_area, out_debug);
+
+    return deduplicate_detections(detections);
+  }
+
+  // --- Paper corner detection ---
 
   std::optional<cv::Mat> find_paper_corners(const cv::Mat &frame)
   {
@@ -440,6 +487,8 @@ namespace coin
     }
     return rect;
   }
+
+  // --- Feature extraction ---
 
   std::optional<CoinFeature> sample_mean_lab_inside_circle(const cv::Mat &frame_bgr,
                                                            cv::Point2i center, int radius_px)

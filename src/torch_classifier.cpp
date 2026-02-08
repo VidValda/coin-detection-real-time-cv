@@ -69,7 +69,8 @@ namespace coin
     }
   }
 
-  int TorchClassifier::predict(const cv::Mat &frame_bgr, cv::Point2i center, int radius_px) const
+  int TorchClassifier::predict_single(const cv::Mat &frame_bgr, cv::Point2i center, int,
+                                      double, double, double, double) const
   {
     if (!module_)
       return 0;
@@ -84,7 +85,8 @@ namespace coin
   }
 
   std::vector<int> TorchClassifier::predict_batch(const cv::Mat &frame_bgr,
-                                                   const std::vector<std::pair<cv::Point2i, int>> &centers_radii) const
+                                                   const std::vector<std::pair<cv::Point2i, int>> &centers_radii,
+                                                   const std::vector<std::tuple<double, double, double, double>> &) const
   {
     std::vector<int> out;
     if (!module_ || centers_radii.empty())

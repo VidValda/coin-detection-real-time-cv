@@ -14,12 +14,9 @@
 namespace
 {
 
-  constexpr double PAPER_WIDTH_MM = 330.0;
-  constexpr double PAPER_HEIGHT_MM = 216.0;
-  constexpr double SCALE_FACTOR = 5.16036;
-  constexpr int WIDTH_PX = static_cast<int>(PAPER_WIDTH_MM * SCALE_FACTOR);
-  constexpr int HEIGHT_PX = static_cast<int>(PAPER_HEIGHT_MM * SCALE_FACTOR);
-  constexpr double INITIAL_RATIO = 1.0 / SCALE_FACTOR;
+  constexpr int WIDTH_PX = static_cast<int>(coin::Config::PAPER_WIDTH_MM * coin::Config::SCALE_FACTOR);
+  constexpr int HEIGHT_PX = static_cast<int>(coin::Config::PAPER_HEIGHT_MM * coin::Config::SCALE_FACTOR);
+  constexpr double INITIAL_RATIO = 1.0 / coin::Config::SCALE_FACTOR;
   constexpr int ZONE_WIDTH = WIDTH_PX / 6;
 
   struct Zone
@@ -75,7 +72,9 @@ namespace
 int main(int argc, char **argv)
 {
   coin::init_data_root(argc, argv);
-  cv::VideoCapture cap(2, cv::CAP_V4L2);
+  int camera_index = 2;
+  if (argc > 2) { try { camera_index = std::stoi(argv[2]); } catch (...) {} }
+  cv::VideoCapture cap(camera_index, cv::CAP_V4L2);
   cap.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
   cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
 
