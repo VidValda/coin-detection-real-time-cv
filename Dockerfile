@@ -6,7 +6,6 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     g++ \
-    wget \
     unzip \
     libopencv-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -17,6 +16,9 @@ COPY CMakeLists.txt ./
 COPY include/ ./include/
 COPY src/ ./src/
 COPY build_with_torch.sh ./
+
+RUN mkdir -p /build/build
+COPY libtorch-2.5.1.zip /build/build/libtorch.zip
 
 RUN echo "Building with LibTorch support..." && \
     sed -i 's/\r$//' build_with_torch.sh && \

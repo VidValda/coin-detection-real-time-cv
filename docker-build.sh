@@ -18,15 +18,7 @@ echo "========================================"
 echo "Platform: $(get_platform_display_name)"
 echo ""
 
-if [[ "$PLATFORM" == "windows" ]] || [[ "$PLATFORM" == "wsl2" ]]; then
-    echo "ℹ️  Note: Windows Docker Desktop may experience network issues during build."
-    echo "   If LibTorch download fails, the build will provide workarounds."
-    echo ""
-fi
-
-echo "Building with LibTorch support..."
-echo "This will download ~200MB LibTorch archive"
-echo "and may take 10-15 minutes."
+echo "Building with LibTorch support (using repo libtorch zip)..."
 echo ""
 
 docker build \
