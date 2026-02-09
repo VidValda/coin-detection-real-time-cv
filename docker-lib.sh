@@ -40,28 +40,62 @@ setup_display_macos() {
 }
 
 setup_display_wsl2() {
-    if [[ -n "$WAYLAND_DISPLAY" ]] || [[ -S "/tmp/.X11-unix/X0"     ]]; then
+    if [[ -d "/mnt/wslg" ]]; then
+        DISPLAY_ENV="-e DISPLAY=$DISPLAY -e WAYLAND_DISPLAY=$WAYLAND_DISPLAY -e XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR -e PULSE_SERVER=$PULSE_SERVER"
+        DISPLAY_VOLUME="-v /tmp/.X11-unix:/tmp/.X11-unix:rw -v /mnt/wslg:/mnt/wslg:ro"
+        WSLG_AVAILABLE=true
+    elif [[ -n "$WAYLAND_DISPLAY" ]] || [[ -S "/tmp/.X11-unix/X0" ]]; then
         DISPLAY_ENV="-e DISPLAY=$DISPLAY"
         DISPLAY_VOLUME="-v /tmp/.X11-unix:/tmp/.X11-unix:rw"
+        WSLG_AVAILABLE=false
     else
         WINDOWS_HOST=$(grep nameserver /etc/resolv.conf | awk '{print $2}' 2>/dev/null || echo "localhost")
         DISPLAY_ENV="-e DISPLAY=${WINDOWS_HOST}:0"
         DISPLAY_VOLUME=""
+        WSLG_AVAILABLE=false
 
-        echo "ℹ️  Note: Using Windows X server at ${WINDOWS_HOST}:0"
-        echo "   Make sure an X server (VcXsrv or Xming) is running on Windows"
+        echo "========================================"
+        echo "  X Server Required (VcXsrv)"
+        echo "========================================"
+        echo ""
+        echo "WSLg not detected. You need an X server on Windows to display the GUI."
+        echo ""
+        echo "Setup steps:"
+        echo "  1. Download VcXsrv: https://sourceforge.net/projects/vcxsrv/"
+        echo "  2. Install and launch XLaunch with these settings:"
+        echo "     - Display settings: Multiple windows (default)"
+        echo "     - Client startup:   Start no client (default)"
+        echo "     - Extra settings:   CHECK 'Disable access control'"
+        echo "  3. Allow through Windows Firewall if prompted"
+        echo ""
+        echo "Alternatively, update WSL to get WSLg (no extra software needed):"
+        echo "  Open PowerShell as Admin and run: wsl --update"
         echo ""
     fi
-    export DISPLAY_ENV DISPLAY_VOLUME
+    export DISPLAY_ENV DISPLAY_VOLUME WSLG_AVAILABLE
 }
 
 setup_display_windows() {
-    echo "⚠️  Warning: Running on native Windows"
-    echo "   An X server (VcXsrv or Xming) is required for GUI display"
-    echo ""
-
     DISPLAY_ENV="-e DISPLAY=host.docker.internal:0"
     DISPLAY_VOLUME=""
+
+    echo "========================================"
+    echo "  Windows Display Setup"
+    echo "========================================"
+    echo ""
+    echo "RECOMMENDED: Run from WSL2 instead of Git Bash/PowerShell."
+    echo "  WSL2 with WSLg (Windows 11) needs no extra software."
+    echo "  Open your WSL terminal and run: ./docker-build-and-run.sh"
+    echo ""
+    echo "If you must use native Windows, install an X server:"
+    echo "  1. Download VcXsrv: https://sourceforge.net/projects/vcxsrv/"
+    echo "  2. Install and launch XLaunch with these settings:"
+    echo "     - Display settings: Multiple windows (default)"
+    echo "     - Client startup:   Start no client (default)"
+    echo "     - Extra settings:   CHECK 'Disable access control'"
+    echo "  3. Allow through Windows Firewall if prompted"
+    echo ""
+
     export DISPLAY_ENV DISPLAY_VOLUME
 }
 
@@ -255,10 +289,14 @@ get_platform_features() {
             echo "⚠️  Limited: Display via XQuartz, No camera support"
             ;;
         wsl2)
-            echo "⚠️  Limited: Display via WSLg/X server, Limited camera support"
+            if [[ "$WSLG_AVAILABLE" == "true" ]]; then
+                echo "✅ Display via WSLg (automatic), Limited camera support"
+            else
+                echo "⚠️  Display via VcXsrv (manual setup required), Limited camera support"
+            fi
             ;;
         windows)
-            echo "⚠️  Limited: Display via X server, No camera support"
+            echo "⚠️  Display requires VcXsrv or WSL2 (see instructions above), No camera support"
             ;;
         *)
             echo "❓ Unknown platform"
