@@ -3,11 +3,19 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! source "${SCRIPT_DIR}/docker-lib.sh"; then
+    echo "Error: Failed to load docker-lib.sh"
+    echo "Make sure docker-lib.sh exists in the same directory as this script."
+    exit 1
+fi
+
 cd "$SCRIPT_DIR"
 
+detect_platform
 echo "========================================"
 echo "Building Coin Counter Docker Image"
 echo "========================================"
+echo "Platform: $(get_platform_display_name)"
 echo ""
 echo "Building with LibTorch support..."
 echo "This will download ~200MB LibTorch archive"

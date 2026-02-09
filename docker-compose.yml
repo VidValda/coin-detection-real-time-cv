@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   coin-counter:
@@ -13,8 +13,6 @@ services:
     volumes:
       - ./data:/app/data:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-    devices:
-      - /dev/video2:/dev/video2
     network_mode: host
     stdin_open: true
     tty: true
@@ -31,8 +29,6 @@ services:
     volumes:
       - ./data:/app/data:rw
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-    devices:
-      - /dev/video2:/dev/video2
     network_mode: host
     stdin_open: true
     tty: true
