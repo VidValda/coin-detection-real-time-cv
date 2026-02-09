@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iostream>
 #include <chrono>
+#include <filesystem>
 
 namespace
 {
@@ -39,7 +40,36 @@ int main(int argc, char **argv)
   cv::VideoCapture cap;
   for (int i = 0; i < num_test_videos; ++i)
   {
-    cap.open(coin::data_path(test_videos[i]), cv::CAP_FFMPEG);
+    std::string video_path = coin::data_path(test_videos[i]);
+    
+    if (!std::filesystem::exists(video_path))
+    {
+      std::cerr << "Error: Test video not found at: " << video_path << "\n";
+      std::cerr << "  Ensure data/videos/test1.mp4 exists in your data directory.\n";
+      continue;
+    }
+    
+    auto file_size = std::filesystem::file_size(video_path);
+    if (file_size < 1024 * 1024)
+    {
+      std::ifstream check_file(video_path, std::ios::binary);
+      if (check_file)
+      {
+        std::string first_line;
+        std::getline(check_file, first_line);
+        if (first_line.find("version https://git-lfs.github.com/spec/v1") != std::string::npos)
+        {
+          std::cerr << "Error: " << video_path << " appears to be a Git LFS pointer file.\n";
+          std::cerr << "  Install Git LFS and run: git lfs pull\n";
+          std::cerr << "  Or download the actual video file manually.\n";
+          continue;
+        }
+      }
+      std::cerr << "Warning: " << video_path << " is suspiciously small (" 
+                << file_size << " bytes). Video may be corrupted.\n";
+    }
+    
+    cap.open(video_path, cv::CAP_FFMPEG);
     if (cap.isOpened())
     {
       current_video_index = i;
