@@ -18,18 +18,8 @@ COPY include/ ./include/
 COPY src/ ./src/
 COPY build_with_torch.sh ./
 
-# Copy pre-downloaded LibTorch if available
-COPY libtorch*.zip /build/ 2>/dev/null || true
-
 RUN echo "Building with LibTorch support..." && \
     sed -i 's/\r$//' build_with_torch.sh && \
-    # Extract LibTorch if pre-downloaded
-    if ls /build/libtorch*.zip 1> /dev/null 2>&1; then \
-        echo "✓ Using pre-downloaded LibTorch from host machine..." && \
-        mkdir -p /build/build && \
-        unzip -q /build/libtorch*.zip -d /build/build && \
-        rm -f /build/libtorch*.zip; \
-    fi && \
     bash build_with_torch.sh
 
 FROM ubuntu:22.04 AS runtime-base
