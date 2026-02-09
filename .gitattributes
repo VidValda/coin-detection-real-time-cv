@@ -1,2 +1,18 @@
-*.mp4 filter=lfs diff=lfs merge=lfs -text
+
+*.sh text eol=lf
+docker-lib.sh text eol=lf
+build_with_torch.sh text eol=lf
+docker-build.sh text eol=lf
+docker-run.sh text eol=lf
+docker-train.sh text eol=lf
+docker-build-and-run.sh text eol=lf
+* text=auto
+*.zip binary
+*.mp4 binary
+*.jpg binary
+*.png binary
+*.pdf binary
+*.pt binary
+*.pth binary
+*.onnx binary
 libtorch-2.5.1.zip filter=lfs diff=lfs merge=lfs -text

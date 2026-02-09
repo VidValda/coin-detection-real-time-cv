@@ -19,6 +19,7 @@ COPY src/ ./src/
 COPY build_with_torch.sh ./
 
 RUN echo "Building with LibTorch support..." && \
+    sed -i 's/\r$//' build_with_torch.sh && \
     bash build_with_torch.sh
 
 FROM ubuntu:22.04 AS runtime-base
