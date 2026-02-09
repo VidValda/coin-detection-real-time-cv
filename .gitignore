@@ -30,8 +30,14 @@ __pycache__/
 .Python
 venv/
 .env
+release/
 
 .DS_Store
 Thumbs.db
 
 data/videos/test1.mp4
+
+*.AppImage
+CoinCounter.AppDir/
+appimagetool-*.AppImage
+linuxdeploy-*.AppImage
