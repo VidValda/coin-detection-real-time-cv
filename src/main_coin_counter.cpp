@@ -37,41 +37,20 @@ int main(int argc, char **argv)
   int current_video_index = -1;
 
   cv::VideoCapture cap;
-  if (coin::Config::USE_TEST_VIDEOS)
+  for (int i = 0; i < num_test_videos; ++i)
   {
-    for (int i = 0; i < num_test_videos; ++i)
+    cap.open(coin::data_path(test_videos[i]), cv::CAP_FFMPEG);
+    if (cap.isOpened())
     {
-      cap.open(coin::data_path(test_videos[i]));
-      if (cap.isOpened())
-      {
-        current_video_index = i;
-        std::cout << "Using test video: " << test_videos[i] << "\n";
-        break;
-      }
-    }
-    if (!cap.isOpened())
-    {
-      std::cerr << "Could not open test videos.\n";
-      return 1;
+      current_video_index = i;
+      std::cout << "Using test video: " << test_videos[i] << "\n";
+      break;
     }
   }
-  else
+  if (!cap.isOpened())
   {
-    int camera_index = 2;
-    if (argc > 2)
-    {
-      try { camera_index = std::stoi(argv[2]); }
-      catch (...) {}
-    }
-    cap.open(camera_index, cv::CAP_V4L2);
-    if (!cap.isOpened())
-    {
-      std::cerr << "Could not open camera (index " << camera_index << "). "
-                << "Pass camera index as second argument.\n";
-      return 1;
-    }
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
+    std::cerr << "Could not open test videos.\n";
+    return 1;
   }
 
   int width_px = static_cast<int>(coin::Config::PAPER_WIDTH_MM * coin::Config::SCALE_FACTOR);
@@ -181,7 +160,7 @@ int main(int argc, char **argv)
       {
         cap.release();
         ++current_video_index;
-        cap.open(coin::data_path(test_videos[current_video_index]));
+        cap.open(coin::data_path(test_videos[current_video_index]), cv::CAP_FFMPEG);
         if (cap.isOpened())
         {
           std::cout << "Next test video: " << test_videos[current_video_index] << "\n";
