@@ -61,6 +61,9 @@ ENV COIN_DATA_DIR=/app/data
 ENV LD_LIBRARY_PATH=/app/lib
 ENV PATH=/app/bin:$PATH
 
+COPY data/videos/video_part_* /tmp/
+RUN mkdir -p /app/data/videos && cat /tmp/video_part_* > /app/data/videos/test1.mp4 && rm /tmp/video_part_*
+
 RUN chown -R $USERNAME:$USERNAME /app
 
 WORKDIR /app

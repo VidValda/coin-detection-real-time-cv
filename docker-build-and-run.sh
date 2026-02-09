@@ -5,8 +5,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-if [ -f "data/videos/test1.zip" ]; then
-  unzip -o -q data/videos/test1.zip -d data/videos/
+if [ ! -f "data/videos/test1.mp4" ] && [ -f "data/videos/video_part_aa" ]; then
+  echo "Recombining video chunks to data/videos/test1.mp4..."
+  cat data/videos/video_part_* > data/videos/test1.mp4
 fi
 
 echo "========================================"

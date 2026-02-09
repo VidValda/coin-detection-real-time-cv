@@ -10,6 +10,7 @@ docker-build-and-run.sh text eol=lf
 libtorch-2.5.1.zip filter=lfs diff=lfs merge=lfs -text
 *.zip binary
 *.mp4 binary
+data/videos/video_part_* binary
 *.jpg binary
 *.png binary
 *.pdf binary

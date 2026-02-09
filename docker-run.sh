@@ -11,8 +11,9 @@ if ! source "${SCRIPT_DIR}/docker-lib.sh"; then
 fi
 
 DATA_DIR="${SCRIPT_DIR}/data"
-if [ -f "${SCRIPT_DIR}/data/videos/test1.zip" ]; then
-  unzip -o -q "${SCRIPT_DIR}/data/videos/test1.zip" -d "${SCRIPT_DIR}/data/videos/"
+if [ ! -f "${SCRIPT_DIR}/data/videos/test1.mp4" ] && [ -f "${SCRIPT_DIR}/data/videos/video_part_aa" ]; then
+  echo "Recombining video chunks to data/videos/test1.mp4..."
+  cat "${SCRIPT_DIR}/data/videos/video_part_"* > "${SCRIPT_DIR}/data/videos/test1.mp4"
 fi
 IMAGE="${1:-coin-counter:latest}"
 CMD="${2:-coin_counter}"
