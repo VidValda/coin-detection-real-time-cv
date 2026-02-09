@@ -37,10 +37,10 @@ namespace coin
         static constexpr double DIAMETER_MM_MIN = 15.0;
         static constexpr double DIAMETER_MM_MAX = 30.0;
 
-        static constexpr int CENTER_MATCH_PX = 20;
+        static constexpr int CENTER_MATCH_PX = 10;
         static constexpr int DIAMETER_HISTORY_LEN = 20;
         static constexpr int MAX_FRAMES_MISSING = 2;
-        static constexpr double MAX_DIAMETER_DEVIATION_MM = 3.0;
+        static constexpr double MAX_DIAMETER_DEVIATION_MM = 4.0;
         static constexpr int MIN_SAMPLES_FOR_STABLE = 2;
 
         static constexpr const char *CSV_PATH = "coin_data.csv";
@@ -70,12 +70,12 @@ namespace coin
         static constexpr int PAPER_LINE_MIN_LENGTH = 100;
         static constexpr int PAPER_MORPH_KERNEL = 3;
         static constexpr double PAPER_APPROX_EPS_FACTOR = 0.02;
-        static constexpr int PAPER_MIN_AREA = 10000;
+        static constexpr int PAPER_MIN_AREA = 50000;
         static constexpr int PAPER_DETECT_MAX_WIDTH = 480;
         static constexpr int STABILIZER_WINDOW = 100;
         static constexpr double COIN_DETECT_SCALE = 1;
 
-        static constexpr int PAPER_DETECT_EVERY_N_FRAMES = 10;
+        static constexpr int PAPER_DETECT_EVERY_N_FRAMES = 100;
 
         static constexpr int COIN_DETECT_EVERY_N_FRAMES = 30;
 

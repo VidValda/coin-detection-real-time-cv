@@ -23,7 +23,7 @@ namespace
     int idx = 0;
     if (f && (f >> idx) && idx >= 0 && idx <= max_idx)
       return idx;
-    return 0;
+    return (max_idx >= 5) ? 5 : 0;
   }
 }
 
