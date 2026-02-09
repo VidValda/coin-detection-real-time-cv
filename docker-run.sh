@@ -11,6 +11,9 @@ if ! source "${SCRIPT_DIR}/docker-lib.sh"; then
 fi
 
 DATA_DIR="${SCRIPT_DIR}/data"
+if [ -f "${SCRIPT_DIR}/data/videos/test1.zip" ]; then
+  unzip -o -q "${SCRIPT_DIR}/data/videos/test1.zip" -d "${SCRIPT_DIR}/data/videos/"
+fi
 IMAGE="${1:-coin-counter:latest}"
 CMD="${2:-coin_counter}"
 USE_CAMERA="${USE_CAMERA:-false}"

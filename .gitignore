@@ -33,3 +33,5 @@ venv/
 
 .DS_Store
 Thumbs.db
+
+data/videos/test1.mp4

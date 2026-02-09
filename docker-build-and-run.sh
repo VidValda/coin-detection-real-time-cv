@@ -5,6 +5,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+if [ -f "data/videos/test1.zip" ]; then
+  unzip -o -q data/videos/test1.zip -d data/videos/
+fi
+
 echo "========================================"
 echo "Build and Run Coin Counter"
 echo "========================================"
