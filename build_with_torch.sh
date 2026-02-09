@@ -91,12 +91,17 @@ else
     fi
   fi
   if [[ ! -d "${LIBTORCH_DIR}/share/cmake/Torch" ]]; then
-    echo "LibTorch not found at ${LIBTORCH_DIR}. Downloading LibTorch ${LIBTORCH_VERSION} (CPU, ~200MB)..."
-    mkdir -p "${BUILD_DIR}"
+    # Check if already extracted in /build (from Dockerfile pre-download)
+    if [[ -d "/build/build/libtorch/share/cmake/Torch" ]]; then
+        echo "✓ Using pre-extracted LibTorch from /build/build/libtorch"
+        LIBTORCH_DIR="/build/build/libtorch"
+    else
+        echo "LibTorch not found at ${LIBTORCH_DIR}. Downloading LibTorch ${LIBTORCH_VERSION} (CPU, ~200MB)..."
+        mkdir -p "${BUILD_DIR}"
 
-    if ! download_libtorch "${LIBTORCH_URL}" "${LIBTORCH_ZIP}"; then
-      exit 1
-    fi
+        if ! download_libtorch "${LIBTORCH_URL}" "${LIBTORCH_ZIP}"; then
+          exit 1
+        fi
 
     echo "Validating downloaded archive..."
     if ! unzip -t "${LIBTORCH_ZIP}" > /dev/null 2>&1; then
