@@ -127,6 +127,7 @@ else
       fi
     fi
     echo "✓ LibTorch ready at ${LIBTORCH_DIR}"
+    fi  # Close inner if from line 95
   else
     echo "✓ Using existing LibTorch at ${LIBTORCH_DIR}"
   fi
