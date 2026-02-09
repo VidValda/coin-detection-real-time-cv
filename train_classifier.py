@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import numpy as np
 import cv2
@@ -14,6 +15,45 @@ CLASSIFIER_MODEL_NAMES = ["coin_svm.yaml", "coin_knn.yaml", "coin_rtrees.yaml", 
 SCALER_PATH = "coin_scaler.yaml"
 DEFAULT_FILE = "classifier_default.txt"
 MODEL_TYPE_NAMES = ["SVM", "KNN", "RandomForest", "NaiveBayes"]
+
+LABEL_TO_CLASS_ID = {"20cent": 0, "10cent": 1, "1euro": 2, "1cent": 3, "2cent": 4, "5cent": 5}
+SCALE_FACTOR_FALLBACK = 5.46104  # Config::SCALE_FACTOR in config.hpp
+
+
+def load_ratio_px_to_mm() -> float:
+    cal_path = MODELS_DIR / "coin_calibration_robust.yaml"
+    if cal_path.is_file():
+        fs = cv2.FileStorage(str(cal_path), cv2.FILE_STORAGE_READ)
+        if fs.isOpened():
+            node = fs.getNode("ratio_px_to_mm")
+            if not node.empty():
+                val = node.real()
+                fs.release()
+                return float(val)
+            fs.release()
+    return 1.0 / SCALE_FACTOR_FALLBACK
+
+
+def extract_crop(
+    bgr: np.ndarray, cx: int, cy: int, crop_size: int, h: int, w: int
+) -> np.ndarray:
+    half = crop_size // 2
+    x1 = cx - half
+    y1 = cy - half
+    x2 = cx + half
+    y2 = cy + half
+    out = np.zeros((crop_size, crop_size, 3), dtype=bgr.dtype)
+    src_x1 = max(0, x1)
+    src_y1 = max(0, y1)
+    src_x2 = min(w, x2)
+    src_y2 = min(h, y2)
+    dst_x1 = src_x1 - x1
+    dst_y1 = src_y1 - y1
+    dst_x2 = dst_x1 + (src_x2 - src_x1)
+    dst_y2 = dst_y1 + (src_y2 - src_y1)
+    if dst_x2 > dst_x1 and dst_y2 > dst_y1:
+        out[dst_y1:dst_y2, dst_x1:dst_x2] = bgr[src_y1:src_y2, src_x1:src_x2]
+    return out
 
 
 def load_manifest(path: Path) -> list[tuple[str, int, float]]:
@@ -99,6 +139,53 @@ def load_dataset(manifest_path: Path, base_dir: Path):
     return X, y
 
 
+def load_dataset_from_training_data_2(base_dir: Path):
+    labels_dir = base_dir / "labels"
+    images_dir = base_dir / "images"
+    if not labels_dir.is_dir() or not images_dir.is_dir():
+        return None, None
+
+    ratio_px_to_mm = load_ratio_px_to_mm()
+    X_list = []
+    y_list = []
+
+    for label_path in sorted(labels_dir.glob("*.json")):
+        with open(label_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        image_path = images_dir / data.get("imagePath", "")
+        if not image_path.is_file():
+            continue
+        bgr = cv2.imread(str(image_path))
+        if bgr is None:
+            continue
+        h, w = bgr.shape[:2]
+        shapes = data.get("shapes", [])
+        for shape in shapes:
+            label_name = shape.get("label")
+            center = shape.get("center")
+            radius = shape.get("radius")
+            if label_name not in LABEL_TO_CLASS_ID or not center or radius is None:
+                continue
+            if radius < 2:
+                continue
+            class_id = LABEL_TO_CLASS_ID[label_name]
+            diameter_mm = (2 * radius) * ratio_px_to_mm
+            cx, cy = int(center[0]), int(center[1])
+            crop_side = max(50, min(2 * radius, min(h, w)))
+            crop_side = crop_side + (1 if crop_side % 2 == 0 else 0)
+            crop = extract_crop(bgr, cx, cy, crop_side, h, w)
+            feat = extract_features(crop, diameter_mm)
+            if feat is not None:
+                X_list.append(feat)
+                y_list.append(class_id)
+
+    if not X_list:
+        return None, None
+    X = np.array(X_list, dtype=np.float32)
+    y = np.array(y_list, dtype=np.int32)
+    return X, y
+
+
 def scale_like_cpp(X: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     n = X.shape[0]
     mean = np.mean(X, axis=0, keepdims=True).astype(np.float32)
@@ -111,15 +198,24 @@ def scale_like_cpp(X: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 def main() -> int:
-    manifest = load_manifest(MANIFEST_PATH)
-    if not manifest:
-        print(f"No manifest or no rows in {MANIFEST_PATH}")
-        print("Run the acquisition tool first: train_acquisition")
+    labels_dir = TRAINING_BASE / "labels"
+    images_dir = TRAINING_BASE / "images"
+    if labels_dir.is_dir() and images_dir.is_dir():
+        X, y = load_dataset_from_training_data_2(TRAINING_BASE)
+    elif MANIFEST_PATH.is_file():
+        manifest = load_manifest(MANIFEST_PATH)
+        if not manifest:
+            print(f"No rows in {MANIFEST_PATH}")
+            return 1
+        X, y = load_dataset(MANIFEST_PATH, TRAINING_BASE)
+    else:
+        print(f"No training data found in {TRAINING_BASE}")
+        print("Either provide images/ and labels/*.json (from train_acquisition), or manifest.csv")
         return 1
 
-    X, y = load_dataset(MANIFEST_PATH, TRAINING_BASE)
     if X is None or y is None:
         print("No valid samples loaded.")
+        print("For training_data_2 ensure images/ and labels/*.json exist and shapes have label, center, radius.")
         return 1
 
     n = len(X)

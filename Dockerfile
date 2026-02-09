@@ -55,7 +55,7 @@ COPY --from=builder /build/build/train_svm /app/bin/
 COPY --from=builder /build/build/libtorch/lib/ /app/lib/
 
 ENV COIN_DATA_DIR=/app/data
-ENV LD_LIBRARY_PATH=/app/lib:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/app/lib
 ENV PATH=/app/bin:$PATH
 
 RUN chown -R $USERNAME:$USERNAME /app
