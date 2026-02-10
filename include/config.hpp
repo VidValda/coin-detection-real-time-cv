@@ -81,7 +81,7 @@ namespace coin
 
         static constexpr int MAX_DISPLAY_WIDTH_PX = 960;
 
-        static constexpr bool SHOW_DEBUG_VIEWS = true;
+        static constexpr bool SHOW_DEBUG_VIEWS = false;
 
         static constexpr bool PRINT_TIMINGS_DEFAULT = false;
 
