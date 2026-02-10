@@ -1,0 +1,549 @@
+#include "coin_detector.hpp"
+#include "config.hpp"
+#include "calibration.hpp"
+#include <opencv2/imgproc.hpp>
+#include <opencv2/highgui.hpp>
+#include <cmath>
+#include <algorithm>
+#include <random>
+
+namespace coin
+{
+
+  static int ensure_odd(int k) { return std::max(1, k | 1); }
+
+  // --- Workspace caches (avoid per-frame allocations) ---
+
+  struct DetectionWorkspace
+  {
+    cv::Size size{0, 0};
+    cv::Mat binary, dist, sure_fg;
+    cv::Mat sure_bg, unknown, markers, watershed_input;
+    void ensure_size(int rows, int cols)
+    {
+      if (size.height != rows || size.width != cols)
+      {
+        size = cv::Size(cols, rows);
+        binary.create(rows, cols, CV_8UC1);
+        dist.create(rows, cols, CV_32F);
+        sure_fg.create(rows, cols, CV_8UC1);
+        sure_bg.create(rows, cols, CV_8UC1);
+        unknown.create(rows, cols, CV_8UC1);
+      }
+    }
+  };
+  static thread_local DetectionWorkspace s_workspace;
+
+  struct MorphCache
+  {
+    cv::Mat k_open_el, k_close_el, k_bg_el;
+    int k_open = -1, k_close = -1, k_bg = -1;
+    void ensure(int open_sz, int close_sz, int bg_sz)
+    {
+      if (k_open != open_sz)
+      {
+        k_open = open_sz;
+        k_open_el = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(k_open, k_open));
+      }
+      if (k_close != close_sz)
+      {
+        k_close = close_sz;
+        k_close_el = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(k_close, k_close));
+      }
+      if (k_bg != bg_sz)
+      {
+        k_bg = bg_sz;
+        k_bg_el = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(k_bg, k_bg));
+      }
+    }
+  };
+  static thread_local MorphCache s_morph;
+
+  // --- Channel extraction ---
+
+  static cv::Mat get_channel(const cv::Mat &frame, int mode)
+  {
+    mode = std::max(0, std::min(6, mode));
+    if (mode == 0)
+    {
+      cv::Mat gray;
+      cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+      return gray;
+    }
+    if (mode >= 1 && mode <= 3)
+    {
+      cv::Mat hsv, ch;
+      cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
+      cv::extractChannel(hsv, ch, mode - 1);
+      return ch;
+    }
+    cv::Mat lab, ch;
+    cv::cvtColor(frame, lab, cv::COLOR_BGR2Lab);
+    cv::extractChannel(lab, ch, mode - 4);
+    return ch;
+  }
+
+  // --- Preprocessing ---
+
+  static cv::Mat preprocess_for_watershed(const cv::Mat &frame)
+  {
+    cv::Mat ch = get_channel(frame, Config::CHANNEL_MODE);
+    cv::Mat enhanced;
+    static cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(
+        static_cast<double>(std::max(1, Config::CLAHE_CLIP)),
+        cv::Size(std::max(1, Config::CLAHE_GRID), std::max(1, Config::CLAHE_GRID)));
+    clahe->apply(ch, enhanced);
+    int k = ensure_odd(Config::BLUR_KSIZE);
+    cv::Mat blurred;
+    cv::medianBlur(enhanced, blurred, k);
+    return blurred;
+  }
+
+  cv::Mat preprocess_for_circles(const cv::Mat &frame)
+  {
+    cv::Mat ch = get_channel(frame, Config::CHANNEL_MODE);
+    cv::Mat enhanced, blurred;
+    static cv::Ptr<cv::CLAHE> clahe_circles = cv::createCLAHE(
+        static_cast<double>(Config::CLAHE_CLIP),
+        cv::Size(std::max(1, Config::CLAHE_GRID), std::max(1, Config::CLAHE_GRID)));
+    clahe_circles->apply(ch, enhanced);
+    cv::medianBlur(enhanced, blurred, ensure_odd(Config::BLUR_KSIZE));
+    return blurred;
+  }
+
+  std::vector<cv::Vec3f> find_circle_candidates(const cv::Mat &blurred)
+  {
+    std::vector<cv::Vec3f> circles;
+    cv::HoughCircles(blurred, circles, cv::HOUGH_GRADIENT, Config::HOUGH_DP,
+                     Config::HOUGH_MIN_DIST, Config::HOUGH_PARAM1, Config::HOUGH_PARAM2,
+                     Config::MIN_RADIUS_PX, Config::MAX_RADIUS_PX);
+    return circles;
+  }
+
+  std::optional<Detection> measure_circle_diameter(const cv::Mat &frame_gray,
+                                                   int x, int y, int r, double ratio_px_to_mm)
+  {
+    int h = frame_gray.rows, w = frame_gray.cols;
+    cv::Mat mask = cv::Mat::zeros(h, w, CV_8UC1);
+    cv::circle(mask, cv::Point(x, y), r, 255, -1);
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+    if (contours.empty())
+      return std::nullopt;
+    auto it = std::max_element(contours.begin(), contours.end(),
+                               [](const std::vector<cv::Point> &a, const std::vector<cv::Point> &b)
+                               {
+                                 return cv::contourArea(a) < cv::contourArea(b);
+                               });
+    double area = cv::contourArea(*it);
+    if (area < Config::MIN_CONTOUR_AREA)
+      return std::nullopt;
+    double perimeter = cv::arcLength(*it, true);
+    if (perimeter <= 0)
+      return std::nullopt;
+    double circularity = 4 * CV_PI * (area / (perimeter * perimeter));
+    if (circularity < Config::MIN_CIRCULARITY)
+      return std::nullopt;
+    cv::Point2f center;
+    float radius;
+    cv::minEnclosingCircle(*it, center, radius);
+    double diameter_px = 2.0 * radius;
+    double diameter_mm = pixel_diameter_to_mm(diameter_px, ratio_px_to_mm);
+    if (diameter_mm < Config::DIAMETER_MM_MIN || diameter_mm > Config::DIAMETER_MM_MAX)
+      return std::nullopt;
+    return Detection{cv::Point2i(static_cast<int>(center.x), static_cast<int>(center.y)), diameter_mm};
+  }
+
+  // --- Watershed pipeline: broken into stages ---
+
+  static void threshold_and_morph(const cv::Mat &blurred, double pixel_scale)
+  {
+    if (Config::USE_ADAPTIVE)
+    {
+      int block = ensure_odd(std::max(3, std::min(51, Config::ADAPTIVE_BLOCK)));
+      cv::adaptiveThreshold(blurred, s_workspace.binary, 255,
+                            cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV,
+                            block, Config::ADAPTIVE_C);
+    }
+    else
+    {
+      cv::threshold(blurred, s_workspace.binary, 0, 255, cv::THRESH_BINARY_INV + cv::THRESH_OTSU);
+    }
+    if (Config::INVERT_BINARY)
+      cv::bitwise_not(s_workspace.binary, s_workspace.binary);
+
+    int k_open = ensure_odd(std::max(1, Config::MORPH_OPEN_SIZE));
+    int k_close = ensure_odd(std::max(1, Config::MORPH_CLOSE_SIZE));
+    int k_bg = ensure_odd(std::max(1, Config::BG_DILATE_SIZE));
+    s_morph.ensure(k_open, k_close, k_bg);
+    cv::morphologyEx(s_workspace.binary, s_workspace.binary, cv::MORPH_OPEN, s_morph.k_open_el,
+                     cv::Point(-1, -1), std::max(0, Config::MORPH_OPEN_ITERS));
+    cv::morphologyEx(s_workspace.binary, s_workspace.binary, cv::MORPH_CLOSE, s_morph.k_close_el,
+                     cv::Point(-1, -1), std::max(0, Config::MORPH_CLOSE_ITERS));
+  }
+
+  // Returns num_labels from connected components; 0 means no foreground found
+  static int compute_watershed_markers(DebugViews *out_debug)
+  {
+    cv::dilate(s_workspace.binary, s_workspace.sure_bg, s_morph.k_bg_el);
+
+    int dsize = (Config::DIST_MASK_SIZE >= 4) ? 5 : 3;
+    cv::distanceTransform(s_workspace.binary, s_workspace.dist, cv::DIST_L2, dsize);
+    double dist_max;
+    cv::minMaxLoc(s_workspace.dist, nullptr, &dist_max);
+
+    if (out_debug && dist_max > 0)
+    {
+      cv::Mat dist_norm;
+      cv::normalize(s_workspace.dist, dist_norm, 0, 255, cv::NORM_MINMAX);
+      dist_norm.convertTo(out_debug->dist_vis, CV_8UC1);
+    }
+    if (dist_max <= 0)
+      return 0;
+
+    double frac = std::max(0.2, std::min(0.6, Config::WATERSHED_FG_FRAC));
+    cv::threshold(s_workspace.dist, s_workspace.sure_fg, frac * dist_max, 255, cv::THRESH_BINARY);
+    s_workspace.sure_fg.convertTo(s_workspace.sure_fg, CV_8UC1);
+
+    if (out_debug)
+      s_workspace.sure_fg.copyTo(out_debug->sure_fg);
+    if (out_debug)
+      s_workspace.binary.copyTo(out_debug->binary);
+
+    cv::subtract(s_workspace.sure_bg, s_workspace.sure_fg, s_workspace.unknown);
+
+    int num_labels = cv::connectedComponents(s_workspace.sure_fg, s_workspace.markers);
+    s_workspace.markers.convertTo(s_workspace.markers, CV_32S);
+    s_workspace.markers += 1;
+    s_workspace.markers.setTo(0, s_workspace.unknown);
+
+    if (out_debug && !s_workspace.markers.empty())
+    {
+      cv::Mat markers_vis = cv::Mat::zeros(s_workspace.markers.rows, s_workspace.markers.cols, CV_8UC3);
+      std::mt19937 rng(42);
+      std::uniform_int_distribution<int> u(150, 255);
+      for (int lid = 1; lid <= num_labels; ++lid)
+      {
+        cv::Vec3b c(static_cast<uchar>(u(rng)), static_cast<uchar>(u(rng)), static_cast<uchar>(u(rng)));
+        markers_vis.setTo(c, s_workspace.markers == lid);
+      }
+      out_debug->markers_vis = markers_vis;
+    }
+
+    return num_labels;
+  }
+
+  struct LabelBounds { int x0, y0, x1, y1; };
+
+  static std::vector<LabelBounds> compute_label_bounds(const cv::Mat &markers_out, int num_labels, int cols, int rows)
+  {
+    std::vector<LabelBounds> bounds(num_labels + 1, {cols, rows, 0, 0});
+    for (int r = 0; r < markers_out.rows; ++r)
+    {
+      const int *mr = markers_out.ptr<int>(r);
+      for (int c = 0; c < markers_out.cols; ++c)
+      {
+        int lbl = mr[c];
+        if (lbl >= 2 && lbl <= num_labels)
+        {
+          auto &bb = bounds[lbl];
+          if (c < bb.x0) bb.x0 = c;
+          if (c > bb.x1) bb.x1 = c;
+          if (r < bb.y0) bb.y0 = r;
+          if (r > bb.y1) bb.y1 = r;
+        }
+      }
+    }
+    return bounds;
+  }
+
+  static Detections extract_detections_from_watershed(const cv::Mat &frame, const cv::Mat &markers_out,
+                                                      int num_labels, double ratio_px_to_mm,
+                                                      double min_contour_area, DebugViews *out_debug)
+  {
+    const int cols = frame.cols, rows = frame.rows;
+    auto label_bounds = compute_label_bounds(markers_out, num_labels, cols, rows);
+
+    cv::Mat segmentation_vis;
+    std::vector<cv::Vec3b> seg_palette;
+    if (out_debug)
+    {
+      segmentation_vis = cv::Mat(rows, cols, CV_8UC3);
+      segmentation_vis.setTo(cv::Scalar(180, 180, 180));
+      if (frame.channels() == 3)
+        cv::addWeighted(segmentation_vis, 0.5, frame, 0.5, 0, segmentation_vis);
+      else if (frame.channels() == 1)
+      {
+        cv::Mat frame_bgr;
+        cv::cvtColor(frame, frame_bgr, cv::COLOR_GRAY2BGR);
+        cv::addWeighted(segmentation_vis, 0.5, frame_bgr, 0.5, 0, segmentation_vis);
+      }
+      seg_palette.resize(num_labels + 1);
+      std::mt19937 rng_p(42);
+      std::uniform_int_distribution<int> u_p(150, 255);
+      for (int lid = 1; lid <= num_labels; ++lid)
+        seg_palette[lid] = cv::Vec3b(static_cast<uchar>(u_p(rng_p)), static_cast<uchar>(u_p(rng_p)), static_cast<uchar>(u_p(rng_p)));
+    }
+
+    std::vector<Detection> detections;
+    for (int label = 2; label <= num_labels; ++label)
+    {
+      const auto &bb = label_bounds[label];
+      if (bb.x0 > bb.x1 || bb.y0 > bb.y1)
+        continue;
+      int bw = bb.x1 - bb.x0 + 1, bh = bb.y1 - bb.y0 + 1;
+      cv::Mat roi_mask(bh, bw, CV_8UC1, cv::Scalar(0));
+      for (int r = bb.y0; r <= bb.y1; ++r)
+      {
+        const int *mr = markers_out.ptr<int>(r);
+        uchar *rm = roi_mask.ptr<uchar>(r - bb.y0);
+        for (int c = bb.x0; c <= bb.x1; ++c)
+          rm[c - bb.x0] = (mr[c] == label) ? 255 : 0;
+      }
+      std::vector<std::vector<cv::Point>> contours;
+      cv::findContours(roi_mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE,
+                        cv::Point(bb.x0, bb.y0));
+      if (contours.empty())
+        continue;
+      const auto &cnt = *std::max_element(contours.begin(), contours.end(),
+                                          [](const std::vector<cv::Point> &a, const std::vector<cv::Point> &b2)
+                                          { return cv::contourArea(a) < cv::contourArea(b2); });
+      double area = cv::contourArea(cnt);
+      if (area < min_contour_area)
+        continue;
+      double perimeter = cv::arcLength(cnt, true);
+      if (perimeter <= 0)
+        continue;
+      double circularity = 4 * CV_PI * (area / (perimeter * perimeter));
+      if (circularity < Config::MIN_CIRCULARITY)
+        continue;
+      cv::Point2f center;
+      float radius;
+      cv::minEnclosingCircle(cnt, center, radius);
+      if (radius < 1.f)
+        continue;
+      double diameter_px = 2.0 * static_cast<double>(radius);
+      double diameter_mm = pixel_diameter_to_mm(diameter_px, ratio_px_to_mm);
+      if (diameter_mm < Config::DIAMETER_MM_MIN || diameter_mm > Config::DIAMETER_MM_MAX)
+        continue;
+      Detection det;
+      det.center = cv::Point2i(static_cast<int>(std::round(center.x)), static_cast<int>(std::round(center.y)));
+      det.diameter_mm = diameter_mm;
+      detections.push_back(det);
+      if (out_debug && !segmentation_vis.empty() && label < static_cast<int>(seg_palette.size()))
+      {
+        cv::drawContours(segmentation_vis, std::vector<std::vector<cv::Point>>{cnt}, 0,
+                         cv::Scalar(seg_palette[label][0], seg_palette[label][1], seg_palette[label][2]), -1);
+      }
+    }
+
+    if (out_debug && !segmentation_vis.empty())
+      out_debug->segmentation = segmentation_vis;
+
+    return detections;
+  }
+
+  static Detections deduplicate_detections(const Detections &detections)
+  {
+    Detections kept;
+    for (const auto &d : detections)
+    {
+      bool too_close = false;
+      for (const auto &k : kept)
+      {
+        double dx = d.center.x - k.center.x;
+        double dy = d.center.y - k.center.y;
+        if (std::hypot(dx, dy) < Config::CENTER_MATCH_PX)
+        {
+          too_close = true;
+          break;
+        }
+      }
+      if (!too_close)
+        kept.push_back(d);
+    }
+    return kept;
+  }
+
+  // --- Main detection entry point ---
+
+  Detections detect_and_measure_coins(const cv::Mat &frame, double ratio_px_to_mm,
+                                      DebugViews *out_debug, double pixel_scale)
+  {
+    if (pixel_scale <= 0)
+      pixel_scale = 1.0;
+    const double min_contour_area = Config::MIN_CONTOUR_AREA * pixel_scale * pixel_scale;
+    s_workspace.ensure_size(frame.rows, frame.cols);
+
+    cv::Mat blurred = preprocess_for_watershed(frame);
+    threshold_and_morph(blurred, pixel_scale);
+
+    int num_labels = compute_watershed_markers(out_debug);
+    if (num_labels <= 0)
+      return {};
+
+    cv::cvtColor(s_workspace.binary, s_workspace.watershed_input, cv::COLOR_GRAY2BGR);
+    cv::Mat markers_out = s_workspace.markers.clone();
+    cv::watershed(s_workspace.watershed_input, markers_out);
+
+    auto detections = extract_detections_from_watershed(
+        frame, markers_out, num_labels, ratio_px_to_mm, min_contour_area, out_debug);
+
+    return deduplicate_detections(detections);
+  }
+
+  // --- Paper corner detection ---
+
+  std::optional<cv::Mat> find_paper_corners(const cv::Mat &frame)
+  {
+    const int max_w = Config::PAPER_DETECT_MAX_WIDTH;
+    double scale = 1.0;
+    cv::Mat work;
+    if (max_w > 0 && frame.cols > max_w)
+    {
+      scale = static_cast<double>(max_w) / frame.cols;
+      cv::resize(frame, work, cv::Size(), scale, scale, cv::INTER_LINEAR);
+    }
+    else
+      work = frame;
+    const int min_area_scaled = static_cast<int>(Config::PAPER_MIN_AREA * scale * scale);
+    const int line_min = static_cast<int>(Config::PAPER_LINE_MIN_LENGTH * scale);
+
+    cv::Mat gray, gray_filtered;
+    cv::cvtColor(work, gray, cv::COLOR_BGR2GRAY);
+    cv::GaussianBlur(gray, gray_filtered, cv::Size(5, 5), 0);
+    static cv::Ptr<cv::LineSegmentDetector> lsd = cv::createLineSegmentDetector(0);
+    std::vector<cv::Vec4f> lines;
+    lsd->detect(gray_filtered, lines);
+    cv::Mat line_mask = cv::Mat::zeros(gray_filtered.size(), CV_8UC1);
+    for (const auto &line : lines)
+    {
+      double dx = line[2] - line[0], dy = line[3] - line[1];
+      if (std::hypot(dx, dy) > line_min)
+      {
+        cv::line(line_mask, cv::Point(line[0], line[1]), cv::Point(line[2], line[3]), 255, 2);
+      }
+    }
+    int k = std::max(1, Config::PAPER_MORPH_KERNEL | 1);
+    static cv::Mat paper_kernel;
+    if (paper_kernel.empty() || paper_kernel.rows != k)
+      paper_kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(k, k));
+    cv::Mat closed;
+    cv::morphologyEx(line_mask, closed, cv::MORPH_CLOSE, paper_kernel);
+    cv::dilate(closed, closed, paper_kernel);
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(closed, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+    std::sort(contours.begin(), contours.end(),
+              [](const std::vector<cv::Point> &a, const std::vector<cv::Point> &b)
+              {
+                return cv::contourArea(a) > cv::contourArea(b);
+              });
+    for (size_t i = 0; i < std::min(size_t(3), contours.size()); ++i)
+    {
+      const auto &cnt = contours[i];
+      double peri = cv::arcLength(cnt, true);
+      std::vector<cv::Point> approx;
+      cv::approxPolyDP(cnt, approx, Config::PAPER_APPROX_EPS_FACTOR * peri, true);
+      if (approx.size() == 4 && cv::contourArea(approx) > min_area_scaled)
+      {
+        cv::Mat corners(4, 2, CV_32F);
+        const double inv_scale = 1.0 / scale;
+        for (int j = 0; j < 4; ++j)
+        {
+          corners.at<float>(j, 0) = static_cast<float>(approx[j].x * inv_scale);
+          corners.at<float>(j, 1) = static_cast<float>(approx[j].y * inv_scale);
+        }
+        return corners;
+      }
+    }
+    return std::nullopt;
+  }
+
+  cv::Mat order_corners(const cv::Mat &corners)
+  {
+    std::vector<cv::Point2f> pts(4);
+    for (int i = 0; i < 4; ++i)
+      pts[i] = cv::Point2f(corners.at<float>(i, 0), corners.at<float>(i, 1));
+    float cx = 0, cy = 0;
+    for (const auto &p : pts)
+    {
+      cx += p.x;
+      cy += p.y;
+    }
+    cx /= 4.f;
+    cy /= 4.f;
+    std::sort(pts.begin(), pts.end(), [cx, cy](const cv::Point2f &a, const cv::Point2f &b)
+              { return std::atan2(a.y - cy, a.x - cx) < std::atan2(b.y - cy, b.x - cx); });
+    int tl = 0;
+    for (int i = 1; i < 4; ++i)
+      if (pts[i].x + pts[i].y < pts[tl].x + pts[tl].y)
+        tl = i;
+    cv::Mat rect(4, 2, CV_32F);
+    for (int i = 0; i < 4; ++i)
+    {
+      const auto &p = pts[(tl + i) % 4];
+      rect.at<float>(i, 0) = p.x;
+      rect.at<float>(i, 1) = p.y;
+    }
+    return rect;
+  }
+
+  // --- Feature extraction ---
+
+  std::optional<CoinFeature> sample_mean_lab_inside_circle(const cv::Mat &frame_bgr,
+                                                           cv::Point2i center, int radius_px)
+  {
+    cv::Mat lab;
+    cv::cvtColor(frame_bgr, lab, cv::COLOR_BGR2Lab);
+    return sample_mean_lab_inside_circle_from_lab(lab, center, radius_px);
+  }
+
+  std::optional<CoinFeature> sample_mean_lab_inside_circle_from_lab(const cv::Mat &frame_lab,
+                                                                    cv::Point2i center, int radius_px)
+  {
+    int h = frame_lab.rows, w = frame_lab.cols;
+    int cx = center.x, cy = center.y;
+    int inner_r = std::max(2, static_cast<int>(radius_px * 0.7));
+    int y0 = std::max(0, cy - inner_r), y1 = std::min(h, cy + inner_r + 1);
+    int x0 = std::max(0, cx - inner_r), x1 = std::min(w, cx + inner_r + 1);
+    if (y1 <= y0 || x1 <= x0)
+      return std::nullopt;
+    cv::Mat roi = frame_lab(cv::Range(y0, y1), cv::Range(x0, x1));
+    cv::Mat mask = cv::Mat::zeros(roi.size(), CV_8UC1);
+    for (int y = 0; y < roi.rows; ++y)
+    {
+      for (int x = 0; x < roi.cols; ++x)
+      {
+        int gx = x0 + x - cx, gy = y0 + y - cy;
+        if (gx * gx + gy * gy <= inner_r * inner_r)
+          mask.at<uchar>(y, x) = 255;
+      }
+    }
+    cv::Scalar mean_val = cv::mean(roi, mask);
+    return CoinFeature{0.0, mean_val[0], mean_val[1], mean_val[2]};
+  }
+
+  std::vector<CoinFeature> collect_coin_features(const cv::Mat &frame_bgr,
+                                                 const std::vector<std::pair<cv::Point2i, double>> &entries,
+                                                 double ratio_px_to_mm)
+  {
+    std::vector<CoinFeature> rows;
+    if (entries.empty())
+      return rows;
+    cv::Mat lab;
+    cv::cvtColor(frame_bgr, lab, cv::COLOR_BGR2Lab);
+    rows.reserve(entries.size());
+    for (const auto &e : entries)
+    {
+      int r = diameter_mm_to_radius_px(e.second, ratio_px_to_mm);
+      auto feat = sample_mean_lab_inside_circle_from_lab(lab, e.first, r);
+      if (feat.has_value())
+      {
+        feat->diameter_mm = e.second;
+        rows.push_back(*feat);
+      }
+    }
+    return rows;
+  }
+
+}

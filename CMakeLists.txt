@@ -1,0 +1,67 @@
+cmake_minimum_required(VERSION 3.14)
+project(coin_counter LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+
+option(USE_SYSTEM_OPENCV "Prefer system OpenCV (e.g. /usr) over /usr/local" ON)
+if(USE_SYSTEM_OPENCV)
+  set(OpenCV_DIR "/usr/lib/x86_64-linux-gnu/cmake/opencv4")
+  if(NOT EXISTS "${OpenCV_DIR}/OpenCVConfig.cmake")
+    set(OpenCV_DIR "")
+  endif()
+endif()
+find_package(OpenCV REQUIRED)
+
+option(USE_TORCH "Build with LibTorch for CNN/ResNet classifiers" OFF)
+if(USE_TORCH)
+  if(DEFINED LibTorch_DIR)
+    list(APPEND CMAKE_PREFIX_PATH "${LibTorch_DIR}")
+  endif()
+  find_package(Torch REQUIRED)
+  message(STATUS "Building with LibTorch: ${Torch_DIR}")
+else()
+  find_package(Torch QUIET)
+  if(Torch_FOUND)
+    message(STATUS "LibTorch found; building with Torch support")
+  endif()
+endif()
+
+set(OPENCV_LIBS_COIN opencv_core opencv_imgproc opencv_videoio opencv_highgui opencv_ml opencv_imgcodecs)
+
+set(COMMON_SOURCES
+  src/calibration.cpp
+  src/data_path.cpp
+  src/svm_classifier.cpp
+  src/corner_stabilizer.cpp
+  src/coin_track.cpp
+  src/coin_tracker.cpp
+  src/coin_detector.cpp
+  src/pipeline.cpp
+  src/runtime_config.cpp
+)
+
+add_library(coin_common ${COMMON_SOURCES})
+target_include_directories(coin_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(coin_common PUBLIC ${OPENCV_LIBS_COIN})
+
+if(Torch_FOUND)
+  target_sources(coin_common PRIVATE src/torch_classifier.cpp)
+  if(TARGET torch::torch)
+    target_link_libraries(coin_common PUBLIC torch::torch)
+  else()
+    target_link_libraries(coin_common PUBLIC ${TORCH_LIBRARIES})
+  endif()
+  target_compile_definitions(coin_common PUBLIC COIN_USE_TORCH=1)
+endif()
+
+add_executable(coin_counter src/main_coin_counter.cpp)
+target_link_libraries(coin_counter PRIVATE coin_common)
+
+add_executable(camera_calibration src/main_camera_calibration.cpp)
+target_link_libraries(camera_calibration PRIVATE coin_common)
+
+add_executable(train_acquisition src/main_train_acquisition.cpp)
+target_link_libraries(train_acquisition PRIVATE coin_common)
+
+add_executable(train_svm src/main_train_svm.cpp)
+target_link_libraries(train_svm PRIVATE coin_common)

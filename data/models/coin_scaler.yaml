@@ -1,0 +1,15 @@
+%YAML:1.0
+---
+mean: !!opencv-matrix
+   rows: 1
+   cols: 4
+   dt: f
+   data: [ 2.14519081e+01, 1.24421234e+02, 1.37907700e+02,
+       1.61868729e+02 ]
+scale: !!opencv-matrix
+   rows: 1
+   cols: 4
+   dt: f
+   data: [ 2.51851463e+00, 3.24950523e+01, 7.36526966e+00,
+       9.36353779e+00 ]
+model_type: SVM
