@@ -37,6 +37,8 @@ Thumbs.db
 
 data/videos/test1.mp4
 
+libtorch-2.5.1.zip
+
 *.AppImage
 CoinCounter.AppDir/
 appimagetool-*.AppImage

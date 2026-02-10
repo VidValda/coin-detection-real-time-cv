@@ -29,6 +29,8 @@ Then run `python export_torchscript.py` from the project root to generate `coin_
 
 **If CNN/ResNet fail to load** with "maximum supported version for reading is 1": your LibTorch is too old. Delete `build/libtorch` and run `./build_with_torch.sh` again (it downloads LibTorch 2.5.1 by default).
 
+**Docker build** uses LibTorch from chunk files `libtorch_part_aa`, `libtorch_part_ab`, ... in the repo (no LFS). To regenerate parts after downloading the zip: `split -b 90m libtorch-2.5.1.zip libtorch_part_`.
+
 ---
 
 ## Executables

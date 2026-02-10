@@ -18,7 +18,8 @@ COPY src/ ./src/
 COPY build_with_torch.sh ./
 
 RUN mkdir -p /build/build
-COPY libtorch-2.5.1.zip /build/build/libtorch.zip
+COPY libtorch_part_* /build/build/
+RUN cat /build/build/libtorch_part_* > /build/build/libtorch.zip && rm /build/build/libtorch_part_*
 
 RUN echo "Building with LibTorch support..." && \
     sed -i 's/\r$//' build_with_torch.sh && \
@@ -36,6 +37,7 @@ RUN apt-get update && apt-get install -y \
     libopencv-ml4.5d \
     libopencv-imgcodecs4.5d \
     libgomp1 \
+    libaribb24-0 \
     && rm -rf /var/lib/apt/lists/*
 
 FROM runtime-base AS runtime

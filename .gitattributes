@@ -7,7 +7,7 @@ docker-run.sh text eol=lf
 docker-train.sh text eol=lf
 docker-build-and-run.sh text eol=lf
 * text=auto
-libtorch-2.5.1.zip filter=lfs diff=lfs merge=lfs -text
+libtorch_part_* binary
 *.zip binary
 *.mp4 binary
 data/videos/video_part_* binary

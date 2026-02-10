@@ -42,6 +42,8 @@ Thumbs.db
 *.bak
 *.tmp
 
+libtorch-2.5.1.zip
+
 .dockerignore
 Dockerfile
 docker-compose.yml

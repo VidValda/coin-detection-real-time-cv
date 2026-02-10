@@ -29,7 +29,9 @@ echo "Step 2: Extracting binaries from Docker..."
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR"/usr/{bin,lib,share/coin-counter}
 
-docker create --name coin_appimage_temp "$IMAGE_NAME" > /dev/null
+docker rm -f coin_appimage_temp 2>/dev/null || true
+docker create --name coin_appimage_temp "$IMAGE_NAME" sleep infinity > /dev/null
+trap 'docker rm -f coin_appimage_temp 2>/dev/null || true' EXIT INT TERM
 echo "  Extracting executables..."
 docker cp coin_appimage_temp:/app/bin/coin_counter "$APPDIR/usr/bin/"
 docker cp coin_appimage_temp:/app/bin/camera_calibration "$APPDIR/usr/bin/"
@@ -42,8 +44,6 @@ docker cp coin_appimage_temp:/app/lib/. "$APPDIR/usr/lib/"
 echo "  Extracting data files from Docker..."
 docker cp coin_appimage_temp:/app/data/. "$APPDIR/usr/share/coin-counter/data/" 2>/dev/null || true
 
-docker rm coin_appimage_temp > /dev/null
-
 echo "  Copying data files from host (models, configs)..."
 if [ -d "$PROJECT_ROOT/data" ]; then
     cp -r "$PROJECT_ROOT/data"/* "$APPDIR/usr/share/coin-counter/data/" 2>/dev/null || true
@@ -53,75 +53,81 @@ else
 fi
 echo ""
 
-echo "Step 3: Bundling dependencies..."
+echo "Step 3: Bundling dependencies from Docker container..."
 
-copy_libs() {
-    local lib="$1"
-    if [ ! -f "$lib" ]; then
-        return
-    fi
+# Start container so we can run ldd inside it
+docker start coin_appimage_temp > /dev/null
 
-    local libname=$(basename "$lib")
+# Collect all required library paths by running ldd on each binary (use /usr/bin/ldd in case PATH is minimal)
+BINARIES="coin_counter camera_calibration train_svm train_acquisition"
+LDDPATH_LIST=""
+for bin in $BINARIES; do
+    out=$(docker exec coin_appimage_temp /usr/bin/ldd /app/bin/$bin 2>/dev/null) || true
+    LDDPATH_LIST="$LDDPATH_LIST $(echo "$out" | sed -n 's/.*=>[[:space:]]*\([^[:space:]]*\).*/\1/p' | grep '^/' || true)"
+done
 
-    if [ -f "$APPDIR/usr/lib/$libname" ]; then
-        return
-    fi
-
+# Copy each library from the container, excluding system/GPU libs
+should_skip() {
+    local libname="$1"
     case "$libname" in
         libc.so*|libm.so*|libdl.so*|libpthread.so*|librt.so*|ld-linux*)
-            return ;;
+            return 0 ;;
         libgcc_s.so*|libstdc++.so*)
-            return ;;
+            return 0 ;;
         libX11.so*|libxcb.so*|libXext.so*|libXrender.so*|libXau.so*)
-            return ;;
+            return 0 ;;
         libGL.so*|libGLX.so*|libEGL.so*|libdrm.so*)
-            return ;;
+            return 0 ;;
         libnvidia*|libcuda*)
-            return ;;
+            return 0 ;;
+        *)
+            return 1 ;;
     esac
-
-    cp -L "$lib" "$APPDIR/usr/lib/" 2>/dev/null || true
 }
 
-echo "  Bundling OpenCV libraries..."
-for lib in /lib/x86_64-linux-gnu/libopencv_*.so.4.5d; do
-    [ -f "$lib" ] && copy_libs "$lib"
+COPIED=0
+for path in $LDDPATH_LIST; do
+    [ -z "$path" ] && continue
+    [[ "$path" != /* ]] && continue
+    libname=$(basename "$path")
+    should_skip "$libname" && continue
+    [ -f "$APPDIR/usr/lib/$libname" ] && continue
+    if docker cp "coin_appimage_temp:$path" "$APPDIR/usr/lib/$libname" 2>/dev/null; then
+        COPIED=$((COPIED + 1))
+        # Create SONAME symlink if loader expects a different name (readelf may be missing on host)
+        soname=$(readelf -d "$APPDIR/usr/lib/$libname" 2>/dev/null | sed -n 's/.*SONAME.*\[\(.*\)\]/\1/p') || true
+        if [ -n "$soname" ] && [ "$soname" != "$libname" ] && [ ! -e "$APPDIR/usr/lib/$soname" ]; then
+            ln -sf "$libname" "$APPDIR/usr/lib/$soname"
+        fi
+    fi
 done
 
-echo "  Bundling GTK libraries..."
-for lib in \
-    /lib/x86_64-linux-gnu/libgtk-3.so.0 \
-    /lib/x86_64-linux-gnu/libgdk-3.so.0 \
-    /lib/x86_64-linux-gnu/libcairo.so.2 \
-    /lib/x86_64-linux-gnu/libgdk_pixbuf-2.0.so.0 \
-    /lib/x86_64-linux-gnu/libgobject-2.0.so.0 \
-    /lib/x86_64-linux-gnu/libglib-2.0.so.0 \
-    /lib/x86_64-linux-gnu/libpango-1.0.so.0 \
-    /lib/x86_64-linux-gnu/libpangocairo-1.0.so.0 \
-    /lib/x86_64-linux-gnu/libgio-2.0.so.0 \
-    /lib/x86_64-linux-gnu/libgmodule-2.0.so.0 \
-    /lib/x86_64-linux-gnu/libatk-1.0.so.0; do
-    [ -f "$lib" ] && copy_libs "$lib"
+# Fallback: if ldd gave no paths, copy known libs from container
+if [ "$COPIED" -eq 0 ]; then
+    echo "  ldd yielded no paths; copying known libs from container..."
+fi
+# Always ensure OpenCV and libaribb24 are present (required by coin_counter)
+for lib_path in \
+    /usr/lib/x86_64-linux-gnu/libaribb24.so.0 \
+    /lib/x86_64-linux-gnu/libaribb24.so.0; do
+    name=$(basename "$lib_path")
+    if [ ! -f "$APPDIR/usr/lib/$name" ] && docker cp "coin_appimage_temp:$lib_path" "$APPDIR/usr/lib/$name" 2>/dev/null; then
+        COPIED=$((COPIED + 1))
+    fi
 done
+opencv_libs=$(docker exec coin_appimage_temp sh -c 'ls /usr/lib/x86_64-linux-gnu/libopencv_*.so.* 2>/dev/null || ls /lib/x86_64-linux-gnu/libopencv_*.so.* 2>/dev/null' 2>/dev/null) || true
+for lib_path in $opencv_libs; do
+    [ -z "$lib_path" ] && continue
+    name=$(basename "$lib_path")
+    [ -f "$APPDIR/usr/lib/$name" ] && continue
+    if docker cp "coin_appimage_temp:$lib_path" "$APPDIR/usr/lib/$name" 2>/dev/null; then
+        COPIED=$((COPIED + 1))
+    fi
+done
+echo "  Bundled $COPIED libraries from container"
 
-echo "  Bundling media libraries..."
-for lib in \
-    /lib/x86_64-linux-gnu/libavcodec.so.58 \
-    /lib/x86_64-linux-gnu/libavformat.so.58 \
-    /lib/x86_64-linux-gnu/libavutil.so.56 \
-    /lib/x86_64-linux-gnu/libswscale.so.5 \
-    /lib/x86_64-linux-gnu/libswresample.so.3; do
-    [ -f "$lib" ] && copy_libs "$lib"
-done
-
-echo "  Bundling GStreamer libraries..."
-for lib in \
-    /lib/x86_64-linux-gnu/libgstreamer-1.0.so.0 \
-    /lib/x86_64-linux-gnu/libgstbase-1.0.so.0 \
-    /lib/x86_64-linux-gnu/libgstapp-1.0.so.0 \
-    /lib/x86_64-linux-gnu/libgstvideo-1.0.so.0; do
-    [ -f "$lib" ] && copy_libs "$lib"
-done
+docker stop coin_appimage_temp > /dev/null
+docker rm coin_appimage_temp > /dev/null
 
 echo ""
 
