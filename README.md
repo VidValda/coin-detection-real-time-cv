@@ -17,7 +17,7 @@ cd coin-detection-real-time-cv
 sudo apt install build-essential cmake libopencv-dev
 ```
 
-### LibTorch
+### LibTorch (optional for DL classification)
 
 ```bash
 # Recomendation: place it inside the root of the project
@@ -36,7 +36,7 @@ pip install -r requirements.txt
 ### Linux
 
 ```bash
-#This makes the asumption that libtorch is on the root of the project
+#This makes the asumption that libtorch is on the root of the project, if not dl inference
 mkdir build && cd build && cmake .. -DLibTorch_DIR=./libtorch -DUSE_TORCH=ON && make
 ./coin_counter ../data
 ```
