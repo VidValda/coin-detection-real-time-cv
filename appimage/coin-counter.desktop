@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Coin Counter
-Comment=Real-time coin detection and classification with computer vision
-Exec=coin_counter
-Icon=coin-counter
-Terminal=false
-Categories=Education;Science;
-Keywords=opencv;machine-learning;coin;detection;classification;computer-vision;
