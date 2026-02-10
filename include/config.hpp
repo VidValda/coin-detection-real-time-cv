@@ -7,7 +7,7 @@ namespace coin
     {
         static constexpr int CLAHE_CLIP = 9;
         static constexpr int CLAHE_GRID = 1;
-        static constexpr int BLUR_KSIZE = 9;
+        static constexpr int BLUR_KSIZE = 7;
         static constexpr int CHANNEL_MODE = 2;
         static constexpr int USE_ADAPTIVE = 0;
         static constexpr int ADAPTIVE_BLOCK = 23;
@@ -20,7 +20,7 @@ namespace coin
         static constexpr int BG_DILATE_SIZE = 4;
 
         static constexpr int DIST_MASK_SIZE = 5;
-        static constexpr double WATERSHED_FG_FRAC = 0.45;
+        static constexpr double WATERSHED_FG_FRAC = 0.55;
 
         static constexpr double CANNY_THRESHOLD1 = 50.0;
         static constexpr double CANNY_THRESHOLD2 = 150.0;
@@ -53,8 +53,8 @@ namespace coin
             "models/coin_svm.yaml", "models/coin_knn.yaml", "models/coin_rtrees.yaml", "models/coin_nb.yaml"};
         static constexpr const char *CLASSIFIER_NAMES[6] = {"SVM", "KNN", "RandomForest", "NaiveBayes", "CNN", "ResNet18"};
         static constexpr const char *CLASSIFIER_DEFAULT_FILE = "models/classifier_default.txt";
-        static constexpr const char *COIN_CNN_TRACED_PATH = "models/coin_cnn_traced.pt";
-        static constexpr const char *COIN_RESNET18_TRACED_PATH = "models/coin_resnet18_traced.pt";
+        static constexpr const char *COIN_CNN_TRACED_PATH = "models/coin_cnn_quantized.pt";
+        static constexpr const char *COIN_RESNET18_TRACED_PATH = "models/coin_resnet18_quantized.pt";
         static constexpr int COIN_CROP_SIZE = 150;
         static constexpr const char *TRAINING_DATA_DIR = "training_data_2";
         static constexpr const char *TRAINING_MANIFEST = "training_data_2/manifest.csv";
@@ -81,7 +81,7 @@ namespace coin
 
         static constexpr int MAX_DISPLAY_WIDTH_PX = 960;
 
-        static constexpr bool SHOW_DEBUG_VIEWS = false;
+        static constexpr bool SHOW_DEBUG_VIEWS = true;
 
         static constexpr bool PRINT_TIMINGS_DEFAULT = false;
 
