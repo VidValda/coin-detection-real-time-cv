@@ -17,7 +17,6 @@ DATA_ROOT = REPO_ROOT / "data" / "training_data_2"
 
 NUM_CLASSES = 6
 CROP_SIZE = 150
-# Same as notebook: 20cent, 10cent, 1euro, 1cent, 2cent, 5cent
 LABEL_TO_ID = {"20cent": 0, "10cent": 1, "1euro": 2, "1cent": 3, "2cent": 4, "5cent": 5}
 
 
@@ -113,7 +112,6 @@ class SmallCNN(nn.Module):
         return self.classifier(self.features(x))
 
 
-# Same as notebook val_transform: ToTensor + ImageNet normalization
 CALIBRATION_TRANSFORM = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -132,7 +130,6 @@ def _get_calibration_loader():
 
 def _quantize_fx(model, calibration_loader, example_input, backend="fbgemm", max_batches=None):
     """Run symbolic_trace -> prepare_fx -> calibration -> convert_fx. Returns quantized model."""
-    # FX API (e.g. PyTorch 1.12): model must be a GraphModule; use symbolic_trace first.
     graph_module = symbolic_trace(model)
     qconfig = get_default_qconfig(backend)
     qconfig_dict = {"": qconfig}
@@ -170,13 +167,11 @@ def main():
     traced_resnet.save(str(MODELS_DIR / "coin_resnet18_traced.pt"))
     print("Saved", MODELS_DIR / "coin_resnet18_traced.pt")
 
-    # --- FX quantized models (calibration from data/training_data_2) ---
     calibration_loader = _get_calibration_loader()
     if calibration_loader is None:
         print("Skipping quantization: data/training_data_2 not found or empty.")
         return
 
-    # SmallCNN quantized
     ckpt = torch.load(str(MODELS_DIR / "coin_cnn.pt"), **load_kw)
     model_cnn_q = SmallCNN(num_classes=NUM_CLASSES)
     model_cnn_q.load_state_dict(ckpt["model_state"], strict=True)
@@ -186,7 +181,6 @@ def main():
     traced_cnn_q.save(str(MODELS_DIR / "coin_cnn_quantized.pt"))
     print("Saved", MODELS_DIR / "coin_cnn_quantized.pt")
 
-    # ResNet18 quantized
     ckpt = torch.load(str(MODELS_DIR / "coin_resnet18.pt"), **load_kw)
     model_resnet_q = resnet18(weights=None)
     model_resnet_q.fc = nn.Linear(model_resnet_q.fc.in_features, NUM_CLASSES)

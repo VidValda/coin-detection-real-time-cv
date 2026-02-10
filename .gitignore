@@ -35,16 +35,13 @@ release/
 .DS_Store
 Thumbs.db
 
-# Datasets (keep outside repo or local only)
 data/training_data/
 data/training_data_2/images_original/
 
-# Downloaded dependencies
 libtorch*/
 libtorch-*.zip
 *.zip
 
-# AppImage build artifacts
 *.AppImage
 CoinCounter.AppDir/
 appimagetool-*.AppImage
